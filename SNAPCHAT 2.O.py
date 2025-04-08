@@ -222,11 +222,11 @@ while True:
         else:
             save_picture(frame)
             timer_started = False
-            cooldown = True
+            cooldown = False
             cooldown_start = current_time
 
-    if cooldown and (current_time - cooldown_start > COOLDOWN_TIME):
-        cooldown = False
+    #if cooldown and (current_time - cooldown_start > COOLDOWN_TIME):
+      #  cooldown = False
 
     draw_filter_buttons(frame)
     cv2.imshow("Face Filter App 😺🐶🤓", frame)

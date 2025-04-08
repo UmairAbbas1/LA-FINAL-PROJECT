@@ -190,17 +190,17 @@ while True:
                         roi = frame[y:y + ear_height, x:x + ear_width]
                         frame[y:y + ear_height, x:x + ear_width] = overlay_image(roi, rgb, mask)
 
-    nose_width = int(ear_width * 0.6)
-    nose_height = int(nose_width * 0.5)
-    nose_img = filter_data["nose"]
-    nose_resized = cv2.resize(nose_img, (nose_width, nose_height))
-    nose_rgb = nose_resized[:, :, :3]
-    nose_mask = nose_resized[:, :, 3]
-    nx = int((left_eye_x + right_eye_x) / 2) - nose_width // 2
-    ny = nose_y - nose_height // 2
-    if 0 <= nx < iw - nose_width and 0 <= ny < ih - nose_height:
-        roi = frame[ny:ny + nose_height, nx:nx + nose_width]
-        frame[ny:ny + nose_height, nx:nx + nose_width] = overlay_image(roi, nose_rgb, nose_mask)
+                        nose_width = int(ear_width * 0.6)
+                        nose_height = int(nose_width * 0.5)
+                        nose_img = filter_data["nose"]
+                        nose_resized = cv2.resize(nose_img, (nose_width, nose_height))
+                        nose_rgb = nose_resized[:, :, :3]
+                        nose_mask = nose_resized[:, :, 3]
+                        nx = int((left_eye_x + right_eye_x) / 2) - nose_width // 2
+                        ny = nose_y - nose_height // 2
+                        if 0 <= nx < iw - nose_width and 0 <= ny < ih - nose_height:
+                            roi = frame[ny:ny + nose_height, nx:nx + nose_width]
+                            frame[ny:ny + nose_height, nx:nx + nose_width] = overlay_image(roi, nose_rgb, nose_mask)
  
 
     # Handle timer for photo capture

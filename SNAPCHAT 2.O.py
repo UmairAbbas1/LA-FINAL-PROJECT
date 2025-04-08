@@ -162,22 +162,32 @@ while True:
             else:
     # 🐶 If the filter is 'dog', show tongue
                 if current_filter == "dog":
-                    tongue_img = filter_data["tongue"]
-                    tongue_width = int(ear_width * 0.6)
-                    tongue_height = int(tongue_width * 0.6)
+    # Detect if mouth is open
+                    top_lip = face_landmarks.landmark[13]
+                    bottom_lip = face_landmarks.landmark[14]
 
-                    # Position it just below the nose
-                    tx = int((left_eye_x + right_eye_x) / 2) - tongue_width // 2
-                    ty = nose_y + int(nose_height * 0.6)
+                    top_lip_y = int(top_lip.y * ih)
+                    bottom_lip_y = int(bottom_lip.y * ih)
+                    mouth_open = (bottom_lip_y - top_lip_y) > 15  # Adjust threshold if needed
 
-                    tongue_resized = cv2.resize(tongue_img, (tongue_width, tongue_height))
-                    tongue_rgb = tongue_resized[:, :, :3]
-                    tongue_mask = tongue_resized[:, :, 3]
+                    if mouth_open:
+                        tongue_img = filter_data["tongue"]
+                        tongue_width = int(ear_width * 0.6)
+                        tongue_height = int(tongue_width * 0.6)
 
-                    if 0 <= tx < iw - tongue_width and 0 <= ty < ih - tongue_height:
-                        roi = frame[ty:ty + tongue_height, tx:tx + tongue_width]
-                        frame[ty:ty + tongue_height, tx:tx + tongue_width] = overlay_image(roi, tongue_rgb, tongue_mask)
+                        # Position it just below the nose
+                        tx = int((left_eye_x + right_eye_x) / 2) - tongue_width // 2
+                        ty = nose_y + int(nose_height * 0.6)
 
+                        tongue_resized = cv2.resize(tongue_img, (tongue_width, tongue_height))
+                        tongue_rgb = tongue_resized[:, :, :3]
+                        tongue_mask = tongue_resized[:, :, 3]
+
+                        if 0 <= tx < iw - tongue_width and 0 <= ty < ih - tongue_height:
+                            roi = frame[ty:ty + tongue_height, tx:tx + tongue_width]
+                            frame[ty:ty + tongue_height, tx:tx + tongue_width] = overlay_image(roi, tongue_rgb, tongue_mask)
+
+                
                 # 🐱🐶 Shared rendering logic (ears + nose)
                 for part, x_offset in [("left_ear", -ear_width), ("right_ear", 0)]:
                     part_img = filter_data[part]
@@ -190,7 +200,7 @@ while True:
                         roi = frame[y:y + ear_height, x:x + ear_width]
                         frame[y:y + ear_height, x:x + ear_width] = overlay_image(roi, rgb, mask)
 
-                        nose_width = int(ear_width * 0.6)
+                        nose_width = int(ear_width * 0.7)
                         nose_height = int(nose_width * 0.5)
                         nose_img = filter_data["nose"]
                         nose_resized = cv2.resize(nose_img, (nose_width, nose_height))

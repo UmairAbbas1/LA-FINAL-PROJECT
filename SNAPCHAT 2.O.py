@@ -3,6 +3,8 @@ import mediapipe as mp
 import os
 import time
 import pygame
+import numpy as np
+
 
 # Initialize Pygame for sound
 pygame.init()
@@ -34,7 +36,18 @@ filters = {
     },
     "glasses": {
         "glass": cv2.imread(r"C:\second semester\Linear Algebra\LA final project\Glasses.png", cv2.IMREAD_UNCHANGED)
-    }
+    },
+    "vintage": {},
+    "brighten": {},
+    "Black & white":{},
+    "cartoon":{},
+    "beauty":{},
+    "sketch":{},
+    "negative":{},
+    "sepia":{},
+    "glitch":{},
+    "neon_glow":{},
+    "Original":{}
 }
 
 filter_names = list(filters.keys())
@@ -66,20 +79,21 @@ def save_picture(frame):
 # Draw floating filter buttons
 def draw_filter_buttons(frame):
     h, w, _ = frame.shape
-    button_size = 60
-    padding = 20
+    button_size = 20  # decreased from 60
+    padding = 5      # slightly reduced padding
     y = h - button_size - 10
     for i, key in enumerate(filter_names):
         x = padding + i * (button_size + padding)
         color = (200, 200, 200) if key != active_filter else (0, 255, 255)
         cv2.rectangle(frame, (x, y), (x + button_size, y + button_size), color, -1)
-        cv2.putText(frame, key.upper(), (x + 5, y + 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(frame, key.upper(), (x + 3, y + 17),  # adjusted Y for smaller text
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.2, (0, 0, 0), 1)  # smaller text size and thickness
+
 
 # Check if a button is clicked
 def check_button_click(x, y, frame_height):
-    button_size = 60
-    padding = 20
+    button_size = 20
+    padding = 5
     y_start = frame_height - button_size - 10
     for i, key in enumerate(filter_names):
         x_start = padding + i * (button_size + padding)
@@ -146,7 +160,14 @@ while True:
             ear_height = int(ear_width * 0.75)
 
             filter_data = filters[current_filter]
+            if current_filter == "vintage":
+                sepia = cv2.transform(frame, 
+                    np.array([[0.272, 0.534, 0.131],
+                            [0.349, 0.686, 0.168],
+                            [0.393, 0.769, 0.189]]))
+                frame = np.clip(sepia, 0, 255).astype(np.uint8)
 
+            
             if current_filter == "glasses":
                 glass = filter_data["glass"]
                 glass_width = int((right_eye_x - left_eye_x) * 2.0)
@@ -159,7 +180,125 @@ while True:
                 if 0 <= gx < iw - glass_width and 0 <= gy < ih - glass_height:
                     roi = frame[gy:gy + glass_height, gx:gx + glass_width]
                     frame[gy:gy + glass_height, gx:gx + glass_width] = overlay_image(roi, glass_rgb, glass_mask)
-            else:
+            
+            elif current_filter == "neon_glow":
+                # Convert to grayscale and apply a blur
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                gray = cv2.GaussianBlur(gray, (21, 21), 0)
+                
+                # Apply a threshold to find edges
+                _, edges = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
+                
+                # Convert the edges to color and blend
+                edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+                
+                # Apply a neon glow effect by blending with original image
+                neon_glow = cv2.addWeighted(frame, 0.7, edges, 0.3, 0)
+                
+                frame = neon_glow
+            
+
+            elif current_filter == "Black & white":
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)  # to keep 3 channels
+            elif current_filter == "cartoon":
+                # Apply bilateral filter multiple times for stronger smoothing
+                color = frame
+                for _ in range(3):
+                    color = cv2.bilateralFilter(color, d=9, sigmaColor=10, sigmaSpace=40)
+                
+                # Convert to grayscale and apply adaptive thresholding to detect edges
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                gray = cv2.medianBlur(gray, 7)
+                
+                # Sharpen the edges by using adaptive threshold with lower contrast (C=2)
+                edges = cv2.adaptiveThreshold(gray, 255,
+                                            cv2.ADAPTIVE_THRESH_MEAN_C,
+                                            cv2.THRESH_BINARY, blockSize=7, C=2)
+                
+                # Convert edges to color to make it compatible with the color image
+                edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+                
+                # Combine the color image and edges to create a cartoon effect
+                cartoon = cv2.bitwise_and(color, edges)
+                
+                # Further sharpen the edges for stronger effect (use filter2D with sharpen kernel)
+                kernel = np.array([[-1, -1, -1], [-1, 30, -1], [-1, -1, -1]])  # Sharpening kernel
+                cartoon = cv2.filter2D(cartoon, -1, kernel)
+                
+                frame = cartoon
+
+            elif current_filter == "beauty":
+                # Gentle skin smoothing
+                blur = cv2.bilateralFilter(frame, d=10, sigmaColor=5, sigmaSpace=20)
+                
+                # Convert to HSV for brightness boost
+                hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+                h, s, v = cv2.split(hsv)
+                v = cv2.add(v, 20)  # light brighten
+                s = cv2.add(s, 20)  # slight saturation for glow
+
+                final_hsv = cv2.merge((h, s, v))
+                frame = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+
+                # Add a soft contrast
+                frame = cv2.addWeighted(frame, 1.1, frame, 0, 5)
+
+            elif current_filter == "negative":
+                # Invert the colors of the frame
+                frame = cv2.bitwise_not(frame)
+            elif current_filter == "sepia":
+                # Create a sepia filter matrix
+                sepia_filter = np.array([[0.393, 0.769, 0.189],
+                                        [0.349, 0.686, 0.168],
+                                        [0.272, 0.534, 0.131]])
+                
+                # Apply the filter to each frame
+                frame = cv2.transform(frame, sepia_filter)
+                
+                # Clip values to ensure they are within the valid range
+                frame = np.clip(frame, 0, 255).astype(np.uint8)
+
+            elif current_filter == "brighten":
+                # Skin smoothing and brighten (using bilateral filter)
+                frame = cv2.bilateralFilter(frame, d=2, sigmaColor=20, sigmaSpace=20)
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                h, s, v = cv2.split(hsv)
+                v = cv2.add(v, 30)  # brighten
+                final_hsv = cv2.merge((h, s, v))
+                frame = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+            elif current_filter == "glitch":
+                # Randomly shift parts of the image horizontally
+                height, width, _ = frame.shape
+                glitch_frame = frame.copy()
+                
+                # Randomly create "glitchy" vertical strips
+                for i in range(0, width, np.random.randint(20, 100)):
+                    y_offset = np.random.randint(-10, 10)
+                    glitch_frame[:, i:i+20] = np.roll(glitch_frame[:, i:i+20], y_offset, axis=0)
+                
+                frame = glitch_frame
+
+            elif current_filter == "sketch":
+                # Convert to grayscale and invert it
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                inverted_gray = cv2.bitwise_not(gray)
+                
+                # Blur the inverted image
+                blurred = cv2.GaussianBlur(inverted_gray, (111, 111), 0)
+                
+                # Invert the blurred image
+                inverted_blurred = cv2.bitwise_not(blurred)
+                
+                # Create the pencil sketch
+                sketch = cv2.divide(gray, inverted_blurred, scale=256.0)
+                
+                # Show the result
+                frame = cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)
+
+            elif current_filter == "none" or current_filter == "original":
+                 pass  # Just show the raw frame
+            elif current_filter in ["cat", "dog"]:
     # 🐶 If the filter is 'dog', show tongue
                 if current_filter == "dog":
     # Detect if mouth is open
@@ -189,29 +328,30 @@ while True:
 
                 
                 # 🐱🐶 Shared rendering logic (ears + nose)
+                #elif current_filter in ["cat", "dog"]:
                 for part, x_offset in [("left_ear", -ear_width), ("right_ear", 0)]:
-                    part_img = filter_data[part]
-                    resized = cv2.resize(part_img, (ear_width, ear_height))
-                    rgb = resized[:, :, :3]
-                    mask = resized[:, :, 3]
-                    x = forehead_x + x_offset
-                    y = forehead_y - int(ear_height * 0.9)
-                    if 0 <= x < iw - ear_width and 0 <= y < ih - ear_height:
-                        roi = frame[y:y + ear_height, x:x + ear_width]
-                        frame[y:y + ear_height, x:x + ear_width] = overlay_image(roi, rgb, mask)
+                        part_img = filter_data[part]
+                        resized = cv2.resize(part_img, (ear_width, ear_height))
+                        rgb = resized[:, :, :3]
+                        mask = resized[:, :, 3]
+                        x = forehead_x + x_offset
+                        y = forehead_y - int(ear_height * 0.9)
+                        if 0 <= x < iw - ear_width and 0 <= y < ih - ear_height:
+                            roi = frame[y:y + ear_height, x:x + ear_width]
+                            frame[y:y + ear_height, x:x + ear_width] = overlay_image(roi, rgb, mask)
 
-                        nose_width = int(ear_width * 0.7)
-                        nose_height = int(nose_width * 0.5)
-                        nose_img = filter_data["nose"]
-                        nose_resized = cv2.resize(nose_img, (nose_width, nose_height))
-                        nose_rgb = nose_resized[:, :, :3]
-                        nose_mask = nose_resized[:, :, 3]
-                        nx = int((left_eye_x + right_eye_x) / 2) - nose_width // 2
-                        ny = nose_y - nose_height // 2
-                        if 0 <= nx < iw - nose_width and 0 <= ny < ih - nose_height:
-                            roi = frame[ny:ny + nose_height, nx:nx + nose_width]
-                            frame[ny:ny + nose_height, nx:nx + nose_width] = overlay_image(roi, nose_rgb, nose_mask)
- 
+                            nose_width = int(ear_width * 0.7)
+                            nose_height = int(nose_width * 0.5)
+                            nose_img = filter_data["nose"]
+                            nose_resized = cv2.resize(nose_img, (nose_width, nose_height))
+                            nose_rgb = nose_resized[:, :, :3]
+                            nose_mask = nose_resized[:, :, 3]
+                            nx = int((left_eye_x + right_eye_x) / 2) - nose_width // 2
+                            ny = nose_y - nose_height // 2
+                            if 0 <= nx < iw - nose_width and 0 <= ny < ih - nose_height:
+                                roi = frame[ny:ny + nose_height, nx:nx + nose_width]
+                                frame[ny:ny + nose_height, nx:nx + nose_width] = overlay_image(roi, nose_rgb, nose_mask)
+            
 
     # Handle timer for photo capture
     current_time = time.time()

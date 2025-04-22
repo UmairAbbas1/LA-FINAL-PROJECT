@@ -1,17 +1,3 @@
-# Face Filter App – FULL VERSION with fixed beauty/brighten filters
-# ------------------------------------------------------------------------
-# Requirements:
-#   pip install opencv-python mediapipe pygame numpy
-# Assets expected in D:\LA-FINAL-PROJECT\:
-#   ├─ Beep.wav
-#   ├─ iphone-camera-capture-6448.wav
-#   ├─ cowboy_music.wav
-#   ├─ CHATH.png
-#   ├─ BADO BADI.wav
-#   ├─ left.png, right.png, nose.png
-#   ├─ Dogleft.png, Dogright.png, Dognose.png, tongue.png
-#   └─ Pictures\  (auto‑created for snapshots)
-# ------------------------------------------------------------------------
 
 import cv2
 import mediapipe as mp

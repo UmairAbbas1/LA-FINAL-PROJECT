@@ -1,747 +1,468 @@
-
+# Face Filter App – FULL VERSION with fixed beauty/brighten filters
+# ------------------------------------------------------------------------
+# Requirements:
+#   pip install opencv-python mediapipe pygame numpy
+# Assets expected in D:\LA-FINAL-PROJECT\:
+#   ├─ Beep.wav
+#   ├─ iphone-camera-capture-6448.wav
+#   ├─ cowboy_music.wav
+#   ├─ CHATH.png
+#   ├─ BADO BADI.wav
+#   ├─ left.png, right.png, nose.png
+#   ├─ Dogleft.png, Dogright.png, Dognose.png, tongue.png
+#   └─ Pictures\  (auto‑created for snapshots)
+# ------------------------------------------------------------------------
 
 import cv2
 import mediapipe as mp
+import numpy as np
+import pygame
 import os
 import time
-import pygame
-import numpy as np
 import random
-import math
 
 ################################################################################
-#                           SOUND & INITIAL SETUP                               #
+#                               INITIAL SETUP                                  #
 ################################################################################
 
+BASE_DIR = r"D:\LA-FINAL-PROJECT"
+PIC_DIR  = os.path.join(BASE_DIR, "Pictures")
+os.makedirs(PIC_DIR, exist_ok=True)
+
+# Pygame for audio
 pygame.init()
+beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
+click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
+cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
+chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
 
-# Load sounds (adjust paths if needed)
-beep = pygame.mixer.Sound(r"D:\LA-FINAL-PROJECT\Beep.wav")
-click = pygame.mixer.Sound(r"D:\LA-FINAL-PROJECT\iphone-camera-capture-6448.wav")
-cowboy_music = pygame.mixer.Sound(r"D:\LA-FINAL-PROJECT\cowboy_music.wav")
-
-# Webcam capture
+# Webcam
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    print("[ERROR] Unable to open webcam.")
-    exit(1)
+    raise RuntimeError("[ERROR] Unable to open webcam.")
 
-# MediaPipe face mesh & hands
+# MediaPipe
 mp_face_mesh = mp.solutions.face_mesh
-mp_hands = mp.solutions.hands
-
+mp_hands     = mp.solutions.hands
 face_mesh = mp_face_mesh.FaceMesh(
     max_num_faces=1,
+    refine_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5
 )
-hands = mp_hands.Hands(max_num_hands=1)
+hands     = mp_hands.Hands(max_num_hands=1)
 
 ################################################################################
-#                            FILTER LOADING & DICTS                             #
+#                           LOAD FILTER IMAGES                                 #
 ################################################################################
-# We'll keep your original dictionary with cat/dog/cowboy/glasses, plus placeholders
-# for color-based filters like glitch, neon_glow, etc.
+
+def png(path):
+    return cv2.imread(os.path.join(BASE_DIR, path), cv2.IMREAD_UNCHANGED)
 
 filters = {
+    # sticker‑based filters
     "cat": {
-        "left_ear":  cv2.imread(r"D:\LA-FINAL-PROJECT\left.png",  cv2.IMREAD_UNCHANGED),
-        "right_ear": cv2.imread(r"D:\LA-FINAL-PROJECT\right.png", cv2.IMREAD_UNCHANGED),
-        "nose":      cv2.imread(r"D:\LA-FINAL-PROJECT\nose.png",  cv2.IMREAD_UNCHANGED)
+        "left_ear" : png("left.png"),
+        "right_ear": png("right.png"),
+        "nose"     : png("nose.png"),
     },
     "dog": {
-        "left_ear":  cv2.imread(r"D:\LA-FINAL-PROJECT\Dogleft.png",   cv2.IMREAD_UNCHANGED),
-        "right_ear": cv2.imread(r"D:\LA-FINAL-PROJECT\Dogright.png",  cv2.IMREAD_UNCHANGED),
-        "nose":      cv2.imread(r"D:\LA-FINAL-PROJECT\Dognose.png",   cv2.IMREAD_UNCHANGED),
-        "tongue":    cv2.imread(r"D:\LA-FINAL-PROJECT\tongue.png",    cv2.IMREAD_UNCHANGED)
+        "left_ear" : png("Dogleft.png"),
+        "right_ear": png("Dogright.png"),
+        "nose"     : png("Dognose.png"),
+        "tongue"   : png("tongue.png"),
     },
     "glasses": {
-        "glass": cv2.imread(r"D:\LA-FINAL-PROJECT\Glasses.png", cv2.IMREAD_UNCHANGED)
+        "glass": png("Glasses.png"),
     },
     "cowboy": {
-        "hat":      cv2.imread(r"D:\LA-FINAL-PROJECT\cowboy_hat.png",     cv2.IMREAD_UNCHANGED),
-        "mustache": cv2.imread(r"D:\LA-FINAL-PROJECT\moustache.png",      cv2.IMREAD_UNCHANGED),
-        #"glasses":  cv2.imread(r"D:\LA-FINAL-PROJECT\cowboy_glasses.png", cv2.IMREAD_UNCHANGED)
+        "hat"     : png("cowboy_hat.png"),
+        "mustache": png("moustache.png"),
     },
-    "vintage":      {},
-    "brighten":     {},
-    "Black & white":{},
-    "cartoon":      {},
-    "beauty":       {},
-    "sketch":       {},
-    "negative":     {},
-    "sepia":        {},
-    "glitch":       {},
-    "neon_glow":    {},
-    "Original":     {}
+    "chath": {},  # filled below
+    # effect filters
+    "vintage"      : {},
+    "brighten"     : {},
+    "Black & white": {},
+    "cartoon"      : {},
+    "beauty"       : {},
+    "sketch"       : {},
+    "negative"     : {},
+    "sepia"        : {},
+    "glitch"       : {},
+    "neon_glow"    : {},
+    "Original"     : {},
 }
 
-# The list of all filter names in your UI
+# Prepare CHATH donor face & mask
+CHATH_PNG = png("CHATH.png")
+if CHATH_PNG is None or CHATH_PNG.shape[2] != 4:
+    raise FileNotFoundError("CHATH.png missing or lacks alpha channel!")
+alpha = CHATH_PNG[:, :, 3]
+mask_ch = (alpha > 200).astype(np.uint8) * 255
+contours, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+if not contours:
+    raise RuntimeError("No contour found in CHATH.png!")
+xx, yy, ww, hh = cv2.boundingRect(contours[0])
+chath_rgb  = CHATH_PNG[yy:yy+hh, xx:xx+ww, :3]
+chath_mask = mask_ch[yy:yy+hh, xx:xx+ww]
+filters["chath"] = {"rgb": chath_rgb, "mask": chath_mask}
+
+# UI panel list
 filter_names = list(filters.keys())
 
-# Active/Current filter states
-active_filter = filter_names[0]
-current_filter = active_filter
-last_filter = None
-
-# Directory to save pictures
-os.makedirs(r"D:\LA-FINAL-PROJECT\Pictures", exist_ok=True)
-pic_count = 0
-
 ################################################################################
-#                     PANEL STATES & GEOMETRY FOR SCROLLING                    #
+#                   GLOBAL STATE FOR PANEL & SNAPSHOT LOGIC                    #
 ################################################################################
 
-# Toggle for panel open/close
-filter_panel_open = False
+active_filter   = filter_names[0]
+current_filter  = active_filter
+last_filter     = None
 
-# Panel origin (where the top bar is anchored)
+panel_open      = False
 panel_x, panel_y = 10, 60
+panel_drag       = False
+panel_width      = 160
+panel_h_vis      = 300
+bar_h            = 20
+arrow_h          = 30
+btn_h            = 40
+pad              = 10
+SCROLL_STEP      = btn_h + pad
+scroll_offset    = 0
+MIN_SCROLL, MAX_SCROLL = 0, 0
 
-# Draggable
-panel_drag = False
-
-# Dimensions
-panel_width = 160
-visible_panel_height = 300
-drag_bar_height = 20
-arrow_zone_height = 30
-
-button_height = 40
-padding = 10
-
-# We'll move one button's worth on each arrow click
-SCROLL_STEP = button_height + padding
-
-# Scroll offset
-panel_scroll_offset = 0
-MIN_SCROLL_OFFSET = 0
-MAX_SCROLL_OFFSET = 0
-
-################################################################################
-#                     COUNTDOWN & COOLDOWN TIMING LOGIC                        #
-################################################################################
-
-timer_started = False
+timer_started   = False
 countdown_start = 0
-cooldown = False
-cooldown_start = 0
-COOLDOWN_TIME = 5   # after taking a picture, wait 5 seconds
-COUNTDOWN_TIME = 3  # 3-second countdown
-last_beep_time = -1 # track beep intervals
+cooldown        = False
+cooldown_start  = 0
+COOLDOWN_TIME   = 5
+COUNTDOWN_TIME  = 3
+last_beep_time  = -1
+pic_count       = 0
 
 ################################################################################
-#                   HELPER FUNCTIONS: OVERLAY & SAVE PICS                      #
+#                            UTILITY FUNCTIONS                                 #
 ################################################################################
 
 def overlay_image(roi, part_img, part_mask):
-    """
-    Overlays a PNG with alpha channel onto ROI (roi).
-    Ensures the images and mask are the same size via resizing if needed.
-    """
     roi = roi.astype(np.uint8)
     part_img = part_img.astype(np.uint8)
     part_mask = part_mask.astype(np.uint8)
-
-    if roi.shape[:2] != part_img.shape[:2] or roi.shape[:2] != part_mask.shape[:2]:
-        part_img = cv2.resize(
-            part_img, (roi.shape[1], roi.shape[0]),
-            interpolation=cv2.INTER_CUBIC
-        )
-        part_mask = cv2.resize(
-            part_mask, (roi.shape[1], roi.shape[0]),
-            interpolation=cv2.INTER_NEAREST
-        )
-
-    mask_inv = cv2.bitwise_not(part_mask)
-    bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+    if roi.shape[:2] != part_img.shape[:2]:
+        part_img  = cv2.resize(part_img, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_CUBIC)
+        part_mask = cv2.resize(part_mask, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_NEAREST)
+    inv = cv2.bitwise_not(part_mask)
+    bg = cv2.bitwise_and(roi, roi, mask=inv)
     fg = cv2.bitwise_and(part_img, part_img, mask=part_mask)
     return cv2.add(bg, fg)
 
 def save_picture(frame):
-    """
-    Saves the current frame with the active filter name + incremental counter.
-    """
     global pic_count
-    filename = os.path.join(
-        r"D:\LA-FINAL-PROJECT\Pictures",
-        f"{active_filter}_filter_{pic_count}.png"
-    )
-    cv2.imwrite(filename, frame)
-    print(f"[✅] Picture saved as {filename}")
+    fname = os.path.join(PIC_DIR, f"{active_filter}_filter_{pic_count}.png")
+    cv2.imwrite(fname, frame)
+    print(f"[✅] Picture saved as {fname}")
     click.play()
     pic_count += 1
 
-################################################################################
-#                      DRAW THE TOGGLE & DRAGGABLE PANEL                       #
-################################################################################
-
-def draw_toggle_button(frame):
+def get_face_box(face_landmarks, w, h):
     """
-    A small rectangle in the top-left corner for toggling the filter panel open/close.
+    Compute bounding box around key facial landmarks.
     """
-    global filter_panel_open
-
-    x, y = 10, 10
-    box_w = 30
-    box_h = 30
-
-    cv2.rectangle(frame, (x, y), (x + box_w, y + box_h), (0, 255, 0), -1)
-    arrow = "<" if filter_panel_open else ">"
-    cv2.putText(
-        frame, arrow,
-        (x + 7, y + 22),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-        (0, 0, 0), 2
-    )
-
-def draw_filter_panel(frame):
-    """
-    Draws a **scrollable** panel with:
-     - a draggable top bar
-     - an Up arrow region
-     - a Down arrow region
-     - a list of filter buttons scrolled by panel_scroll_offset
-    """
-    global filter_panel_open
-    global panel_scroll_offset, MIN_SCROLL_OFFSET, MAX_SCROLL_OFFSET
-    global panel_x, panel_y
-    if not filter_panel_open:
-        return
-
-    # The bar above the panel for dragging:
-    top_bar_y1 = panel_y - drag_bar_height
-    top_bar_y2 = panel_y
-
-    # The bounding rectangle for the entire panel:
-    overall_top = top_bar_y1
-    overall_bottom = panel_y + visible_panel_height
-
-    # Outer border
-    cv2.rectangle(
-        frame,
-        (panel_x, overall_top),
-        (panel_x + panel_width, overall_bottom),
-        (50, 50, 50), 2
-    )
-
-    # Draggable bar
-    cv2.rectangle(
-        frame,
-        (panel_x, top_bar_y1),
-        (panel_x + panel_width, top_bar_y2),
-        (100, 100, 100), -1
-    )
-    cv2.putText(
-        frame, "Move panel",
-        (panel_x + 10, panel_y - 5),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.4,
-        (255, 255, 255), 1
-    )
-
-    # Up arrow region
-    up_arrow_y1 = panel_y
-    up_arrow_y2 = panel_y + arrow_zone_height
-    cv2.rectangle(
-        frame,
-        (panel_x, up_arrow_y1),
-        (panel_x + panel_width, up_arrow_y2),
-        (120, 120, 120), -1
-    )
-    cv2.putText(
-        frame, "Up",
-        (panel_x + 60, up_arrow_y2 - 10),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-        (255, 255, 255), 1
-    )
-
-    # Down arrow region
-    down_arrow_y1 = overall_bottom - arrow_zone_height
-    down_arrow_y2 = overall_bottom
-    cv2.rectangle(
-        frame,
-        (panel_x, down_arrow_y1),
-        (panel_x + panel_width, down_arrow_y2),
-        (120, 120, 120), -1
-    )
-    cv2.putText(
-        frame, "Down",
-        (panel_x + 45, down_arrow_y2 - 10),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-        (255, 255, 255), 1
-    )
-
-    # The scrollable region is between up_arrow_y2 and down_arrow_y1
-    scroll_area_top = up_arrow_y2
-    scroll_area_bottom = down_arrow_y1
-    scroll_area_height = scroll_area_bottom - scroll_area_top
-
-    # Calculate how big the list is
-    num_filters = len(filter_names)
-    total_list_height = num_filters * button_height + (num_filters - 1) * padding
-
-    # Overhang => how much bigger the list is than the visible scroll area
-    overhang = total_list_height - scroll_area_height
-    if overhang < 0:
-        overhang = 0
-    MIN_SCROLL_OFFSET = -overhang
-    MAX_SCROLL_OFFSET = 0
-
-    # Clamp
-    if panel_scroll_offset < MIN_SCROLL_OFFSET:
-        panel_scroll_offset = MIN_SCROLL_OFFSET
-    elif panel_scroll_offset > MAX_SCROLL_OFFSET:
-        panel_scroll_offset = MAX_SCROLL_OFFSET
-
-    # Now draw each filter button with the offset
-    current_y = scroll_area_top + panel_scroll_offset
-    for i, key in enumerate(filter_names):
-        y_pos = current_y + i * (button_height + padding)
-
-        # If button is above the visible area, skip
-        if y_pos + button_height < scroll_area_top:
-            continue
-        # If button is below the visible area, break
-        if y_pos > scroll_area_bottom - button_height:
-            break
-
-        color = (200, 200, 200) if key != active_filter else (0, 255, 255)
-        cv2.rectangle(
-            frame,
-            (panel_x, y_pos),
-            (panel_x + panel_width, y_pos + button_height),
-            color, -1
-        )
-        cv2.putText(
-            frame, key[:12],
-            (panel_x + 5, y_pos + 25),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-            (0, 0, 0), 1
-        )
+    pts = np.array([[p.x*w, p.y*h] for p in face_landmarks.landmark])
+    idx = [10, 152, 234, 454]
+    hull = pts[idx]
+    x, y, bw, bh = cv2.boundingRect(hull.astype(np.float32))
+    pad_w, pad_h = int(bw*0.3), int(bh*0.4)
+    x0 = max(0, x-pad_w); y0 = max(0, y-pad_h)
+    x1 = min(w, x+bw+pad_w); y1 = min(h, y+bh)
+    return x0, y0, x1-x0, y1-y0
 
 ################################################################################
-#                           MOUSE CALLBACK FOR UI                              #
+#                           UI DRAWING FUNCTIONS                               #
 ################################################################################
 
-def mouse_callback(event, x, y, flags, param):
-    """
-    - Toggle the panel (arrow at top-left corner).
-    - Drag the panel by the top bar.
-    - Scroll up/down by arrow clicks.
-    - Select a filter if click is in the scroll region.
-    """
-    global filter_panel_open
-    global panel_drag, panel_x, panel_y
-    global panel_scroll_offset, active_filter, current_filter
+def draw_toggle(frame):
+    x,y,wb,hb = 10,10,30,30
+    cv2.rectangle(frame,(x,y),(x+wb,y+hb),(0,255,0),-1)
+    arrow = "<" if panel_open else ">"
+    cv2.putText(frame,arrow,(x+7,y+22),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,0),2)
 
-    if event == cv2.EVENT_LBUTTONDOWN:
-        # 1) Check toggle arrow
-        if 10 <= x <= 40 and 10 <= y <= 40:
-            filter_panel_open = not filter_panel_open
-            return
-
-        # 2) If the panel is open, see if we clicked inside it
-        if filter_panel_open:
-            # Draggable bar
-            top_bar_y1 = panel_y - drag_bar_height
-            top_bar_y2 = panel_y
-
-            # Up arrow region
-            up_arrow_y1 = panel_y
-            up_arrow_y2 = panel_y + arrow_zone_height
-
-            # Down arrow region
-            down_arrow_y1 = panel_y + visible_panel_height - arrow_zone_height
-            down_arrow_y2 = panel_y + visible_panel_height
-
-            # Entire bounding box for the panel
-            overall_top = top_bar_y1
-            overall_bottom = panel_y + visible_panel_height
-            if (panel_x <= x <= panel_x + panel_width and
-                overall_top <= y <= overall_bottom):
-
-                # 2a) If clicked drag bar
-                if top_bar_y1 <= y <= top_bar_y2:
-                    panel_drag = True
-                    return
-
-                # 2b) If clicked UP arrow
-                if up_arrow_y1 <= y <= up_arrow_y2:
-                    # Move content up by one button => content goes offset down
-                    panel_scroll_offset += SCROLL_STEP
-                    return
-
-                # 2c) If clicked DOWN arrow
-                if down_arrow_y1 <= y <= down_arrow_y2:
-                    # Move content down => offset goes negative
-                    panel_scroll_offset -= SCROLL_STEP
-                    return
-
-                # 2d) Possibly a filter in the scroll region
-                scroll_area_top = up_arrow_y2
-                scroll_area_bottom = down_arrow_y1
-
-                # We'll loop filters to see if the user clicked any
-                current_y = scroll_area_top + panel_scroll_offset
-                for i, key in enumerate(filter_names):
-                    y_pos = current_y + i * (button_height + padding)
-
-                    # Only check if in visible range
-                    if y_pos + button_height < scroll_area_top:
-                        continue
-                    if y_pos > scroll_area_bottom - button_height:
-                        break
-
-                    # The button rect
-                    if (panel_x <= x <= panel_x + panel_width and
-                        y_pos <= y <= y_pos + button_height):
-                        active_filter = key
-                        current_filter = key
-                        return
-
-    elif event == cv2.EVENT_LBUTTONUP:
-        panel_drag = False
-
-    elif event == cv2.EVENT_MOUSEMOVE and panel_drag:
-        # Move the panel in XY
-        # We'll let them move it horizontally & vertically
-        # Or you could clamp so it doesn't go off-screen
-        panel_x = x - panel_width // 2
-        panel_y = y
-        if panel_y < 40:  # keep bar from overlapping toggle arrow
-            panel_y = 40
+def draw_panel(frame):
+    global scroll_offset, MIN_SCROLL, MAX_SCROLL
+    if not panel_open: return
+    t1,t2 = panel_y-bar_h, panel_y
+    b = panel_y+panel_h_vis
+    cv2.rectangle(frame,(panel_x,t1),(panel_x+panel_width,b),(50,50,50),2)
+    cv2.rectangle(frame,(panel_x,t1),(panel_x+panel_width,t2),(100,100,100),-1)
+    cv2.putText(frame,"Move",(panel_x+10,panel_y-5),cv2.FONT_HERSHEY_SIMPLEX,0.4,(255,255,255),1)
+    up1,up2 = panel_y, panel_y+arrow_h
+    cv2.rectangle(frame,(panel_x,up1),(panel_x+panel_width,up2),(120,120,120),-1)
+    cv2.putText(frame,"Up",(panel_x+60,up2-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,255,255),1)
+    down2,down1 = b, b-arrow_h
+    cv2.rectangle(frame,(panel_x,down1),(panel_x+panel_width,down2),(120,120,120),-1)
+    cv2.putText(frame,"Down",(panel_x+45,down2-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,255,255),1)
+    at,ab = up2, down1
+    scroll_h = ab - at
+    tot_h = len(filter_names)*(btn_h+pad)-pad
+    over  = max(0, tot_h-scroll_h)
+    MIN_SCROLL, MAX_SCROLL = -over, 0
+    scroll_offset = max(MIN_SCROLL, min(MAX_SCROLL, scroll_offset))
+    y0 = at + scroll_offset
+    for i,name in enumerate(filter_names):
+        y = y0 + i*(btn_h+pad)
+        if y+btn_h<at or y>ab-btn_h: continue
+        col = (0,255,255) if name==active_filter else (200,200,200)
+        cv2.rectangle(frame,(panel_x,y),(panel_x+panel_width,y+btn_h),col,-1)
+        cv2.putText(frame,name[:12],(panel_x+5,y+25),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,0,0),1)
 
 ################################################################################
-#                          APPLY SELECTED FILTER                               #
+#                         MOUSE CALLBACK (UI)                                  #
 ################################################################################
 
-def apply_filter_logic(frame, iw, ih, face_landmarks):
-    """
-    Overlays or modifies the frame in-place based on current_filter.
-    Ears, hats, glitch, neon, etc. are all in here.
-    """
+def mouse_cb(evt,x,y,flags,param):
+    global panel_open,panel_drag,panel_x,panel_y,scroll_offset
+    global active_filter,current_filter
+    if evt==cv2.EVENT_LBUTTONDOWN:
+        if 10<=x<=40 and 10<=y<=40:
+            panel_open=not panel_open; return
+        if panel_open:
+            t1,t2=panel_y-bar_h,panel_y
+            up1,up2=panel_y,panel_y+arrow_h
+            b=panel_y+panel_h_vis; d1=b-arrow_h
+            if panel_x<=x<=panel_x+panel_width and t1<=y<=b:
+                if t1<=y<=t2:
+                    panel_drag=True; return
+                if up1<=y<=up2:
+                    scroll_offset+=SCROLL_STEP; return
+                if d1<=y<=b:
+                    scroll_offset-=SCROLL_STEP; return
+                top,bot=up2,d1; y0=top+scroll_offset
+                for i,nm in enumerate(filter_names):
+                    yy=y0+i*(btn_h+pad)
+                    if yy<=y<=yy+btn_h and panel_x<=x<=panel_x+panel_width:
+                        active_filter=current_filter=nm; return
+    elif evt==cv2.EVENT_LBUTTONUP:
+        panel_drag=False
+    elif evt==cv2.EVENT_MOUSEMOVE and panel_drag:
+        panel_x=x-panel_width//2
+        panel_y=max(40,y)
+
+################################################################################
+#                        FILTER APPLICATION LOGIC                              #
+################################################################################
+
+def apply_filter_logic(frame, iw, ih, landmarks):
     global current_filter
+    le, re = landmarks.landmark[33], landmarks.landmark[263]
+    nt, fh = landmarks.landmark[1], landmarks.landmark[10]
+    tl, bl = landmarks.landmark[13], landmarks.landmark[14]
+    lex,ley = int(le.x*iw), int(le.y*ih)
+    rex,rey = int(re.x*iw), int(re.y*ih)
+    nx,ny   = int(nt.x*iw), int(nt.y*ih)
+    fx,fy   = int(fh.x*iw), int(fh.y*ih)
+    tly,bly = int(tl.y*ih), int(bl.y*ih)
+    ew = int((rex-lex)*1.8); eh=int(ew*0.75)
+    fdata = filters[current_filter]
 
-    # Grab face landmarks
-    left_eye     = face_landmarks.landmark[33]
-    right_eye    = face_landmarks.landmark[263]
-    nose_tip     = face_landmarks.landmark[1]
-    forehead     = face_landmarks.landmark[10]
-    top_lip      = face_landmarks.landmark[13]
-    bottom_lip   = face_landmarks.landmark[14]
+    # vintage
+    if current_filter=="vintage":
+        sep=cv2.transform(frame,np.array([[0.272,0.534,0.131],[0.349,0.686,0.168],[0.393,0.769,0.189]]))
+        frame[:]=np.clip(sep,0,255).astype(np.uint8)
 
-    left_eye_x  = int(left_eye.x * iw)
-    left_eye_y  = int(left_eye.y * ih)
-    right_eye_x = int(right_eye.x * iw)
-    right_eye_y = int(right_eye.y * ih)
-    nose_x      = int(nose_tip.x * iw)
-    nose_y      = int(nose_tip.y * ih)
-    forehead_x  = int(forehead.x * iw)
-    forehead_y  = int(forehead.y * ih)
-    top_lip_y   = int(top_lip.y * ih)
-    bottom_lip_y= int(bottom_lip.y * ih)
+    # glasses
+    elif current_filter=="glasses":
+        if "glass" in fdata:
+            g=fdata["glass"]; gw=int((rex-lex)*2); gh=int(gw*0.4)
+            r=cv2.resize(g,(gw,gh),cv2.INTER_CUBIC)
+            rgb,msk=r[:,:,:3],r[:,:,3]
+            gx,gy=lex-int(gw*0.25),ley-gh//2
+            if 0<=gx<iw-gw and 0<=gy<ih-gh:
+                frame[gy:gy+gh,gx:gx+gw]=overlay_image(frame[gy:gy+gh,gx:gx+gw],rgb,msk)
 
-    ear_width  = int((right_eye_x - left_eye_x) * 1.8)
-    ear_height = int(ear_width * 0.75)
+    # neon_glow
+    elif current_filter=="neon_glow":
+        gr=cv2.GaussianBlur(cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY),(21,21),0)
+        _,e=cv2.threshold(gr,50,255,cv2.THRESH_BINARY)
+        e=cv2.cvtColor(e,cv2.COLOR_GRAY2BGR)
+        frame[:]=cv2.addWeighted(frame,0.7,e,0.3,0)
 
-    filter_data = filters[current_filter]
+    # Black & white
+    elif current_filter=="Black & white":
+        g=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        frame[:]=cv2.cvtColor(g,cv2.COLOR_GRAY2BGR)
 
-    # ------------------- VINTAGE ------------------- #
-    if current_filter == "vintage":
-        sepia = cv2.transform(
-            frame,
-            np.array([
-                [0.272, 0.534, 0.131],
-                [0.349, 0.686, 0.168],
-                [0.393, 0.769, 0.189]
-            ])
-        )
-        frame[:] = np.clip(sepia, 0, 255).astype(np.uint8)
+    # cartoon
+    elif current_filter=="cartoon":
+        c=frame.copy()
+        for _ in range(3): c=cv2.bilateralFilter(c,9,10,40)
+        g=cv2.medianBlur(cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY),7)
+        e=cv2.adaptiveThreshold(g,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,7,2)
+        e=cv2.cvtColor(e,cv2.COLOR_GRAY2BGR)
+        c2=cv2.bitwise_and(c,e)
+        frame[:]=cv2.filter2D(c2,-1,np.array([[-1,-1,-1],[-1,30,-1],[-1,-1,-1]]))
 
-    # ------------------- GLASSES ------------------- #
-    elif current_filter == "glasses":
-        if "glass" in filter_data:
-            glass = filter_data["glass"]
-            glass_width  = int((right_eye_x - left_eye_x) * 2.0)
-            glass_height = int(glass_width * 0.4)
-            glass_resized = cv2.resize(glass, (glass_width, glass_height), interpolation=cv2.INTER_CUBIC)
-            glass_rgb  = glass_resized[:, :, :3]
-            glass_mask = glass_resized[:, :, 3]
-            gx = left_eye_x - int(glass_width * 0.25)
-            gy = left_eye_y - int(glass_height / 2)
-            if 0 <= gx < iw - glass_width and 0 <= gy < ih - glass_height:
-                roi = frame[gy:gy + glass_height, gx:gx + glass_width]
-                if roi.size > 0:
-                    frame[gy:gy + glass_height, gx:gx + glass_width] = overlay_image(roi, glass_rgb, glass_mask)
+    # beauty (fixed)
+    elif current_filter=="beauty":
+        bil=cv2.bilateralFilter(frame,d=15,sigmaColor=75,sigmaSpace=75)
+        frame[:]=cv2.addWeighted(bil,0.6,frame,0.4,0)
 
-    # ------------------- NEON GLOW ------------------- #
-    elif current_filter == "neon_glow":
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (21, 21), 0)
-        _, edges = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
-        edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-        frame[:] = cv2.addWeighted(frame, 0.7, edges, 0.3, 0)
+    # brighten (fixed)
+    elif current_filter=="brighten":
+        hsv=cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
+        h,s,v=cv2.split(hsv)
+        v=np.clip(v+30,0,255).astype(np.uint8)
+        frame[:]=cv2.cvtColor(cv2.merge((h,s,v)),cv2.COLOR_HSV2BGR)
 
-    # ------------------- BLACK & WHITE ------------------- #
-    elif current_filter == "Black & white":
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame[:] = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    # negative
+    elif current_filter=="negative":
+        frame[:]=cv2.bitwise_not(frame)
 
-    # ------------------- CARTOON ------------------- #
-    elif current_filter == "cartoon":
-        color = frame.copy()
-        for _ in range(3):
-            color = cv2.bilateralFilter(color, d=9, sigmaColor=10, sigmaSpace=40)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.medianBlur(gray, 7)
-        edges = cv2.adaptiveThreshold(
-            gray, 255,
-            cv2.ADAPTIVE_THRESH_MEAN_C,
-            cv2.THRESH_BINARY, blockSize=7, C=2
-        )
-        edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-        cartoon = cv2.bitwise_and(color, edges)
-        kernel = np.array([[-1, -1, -1],
-                           [-1, 30, -1],
-                           [-1, -1, -1]])
-        frame[:] = cv2.filter2D(cartoon, -1, kernel)
+    # sepia
+    elif current_filter=="sepia":
+        t=cv2.transform(frame,np.array([[0.393,0.769,0.189],[0.349,0.686,0.168],[0.272,0.534,0.131]]))
+        frame[:]=np.clip(t,0,255).astype(np.uint8)
 
-    # ------------------- BEAUTY ------------------- #
-    elif current_filter == "beauty":
-        blur = cv2.bilateralFilter(frame, d=10, sigmaColor=5, sigmaSpace=20)
-        hsv  = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv)
-        v = cv2.add(v, 20)
-        s = cv2.add(s, 20)
-        final_hsv = cv2.merge((h, s, v))
-        improved  = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
-        nicer     = cv2.addWeighted(improved, 1.1, improved, 0, 5)
-        frame[:]  = nicer
+    # glitch
+    elif current_filter=="glitch":
+        hh,ww,_=frame.shape
+        for i in range(0,ww,random.randint(20,100)):
+            off=random.randint(-10,10)
+            frame[:,i:i+20]=np.roll(frame[:,i:i+20],off,axis=0)
 
-    # ------------------- NEGATIVE ------------------- #
-    elif current_filter == "negative":
-        frame[:] = cv2.bitwise_not(frame)
+    # sketch
+    elif current_filter=="sketch":
+        g=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        inv=cv2.bitwise_not(g)
+        blur=cv2.GaussianBlur(inv,(111,111),0)
+        sk=cv2.divide(g,cv2.bitwise_not(blur),scale=256.0)
+        frame[:]=cv2.cvtColor(sk,cv2.COLOR_GRAY2BGR)
 
-    # ------------------- SEPIA ------------------- #
-    elif current_filter == "sepia":
-        sepia_filter = np.array([
-            [0.393, 0.769, 0.189],
-            [0.349, 0.686, 0.168],
-            [0.272, 0.534, 0.131]
-        ])
-        tinted = cv2.transform(frame, sepia_filter)
-        frame[:] = np.clip(tinted, 0, 255).astype(np.uint8)
+    # chath
+    elif current_filter=="chath":
+        # rainbow tint
+        hsv=cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
+        hue=(int(time.time()*60)%180)
+        rain=np.full_like(hsv,(hue,255,255))
+        rr=cv2.cvtColor(rain,cv2.COLOR_HSV2BGR)
+        frame[:]=cv2.addWeighted(frame,0.5,rr,0.5,0)
+        # overlay face
+        x0,y0,bw,bh=get_face_box(landmarks,iw,ih)
+        donor=cv2.resize(filters["chath"]["rgb"],(bw,bh),cv2.INTER_AREA)
+        msk=cv2.resize(filters["chath"]["mask"],(bw,bh),cv2.INTER_NEAREST)
+        h_clip=min(bh,ih-y0); w_clip=min(bw,iw-x0)
+        donor=donor[:h_clip,:w_clip]; msk=msk[:h_clip,:w_clip]
+        roi=frame[y0:y0+h_clip,x0:x0+w_clip]
+        np.copyto(roi,donor,where=msk[...,None].astype(bool))
 
-    # ------------------- BRIGHTEN ------------------- #
-    elif current_filter == "brighten":
-        temp = cv2.bilateralFilter(frame, d=2, sigmaColor=20, sigmaSpace=20)
-        hsv = cv2.cvtColor(temp, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv)
-        v = cv2.add(v, 30)
-        final_hsv = cv2.merge((h, s, v))
-        frame[:] = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+    # cowboy
+    elif current_filter=="cowboy":
+        hat=fdata.get("hat"); ms=fdata.get("mustache")
+        if hat is not None:
+            hw=int((rex-lex)*2.5)+40; hh=int(hw*0.6)+20
+            hx,hy=fx-hw//2,fy-hh+10
+            if 0<=hx<iw-hw and 0<=hy<ih-hh:
+                r=cv2.resize(hat,(hw,hh),cv2.INTER_CUBIC)
+                frame[hy:hy+hh,hx:hx+hw]=overlay_image(frame[hy:hy+hh,hx:hx+hw],r[:,:,:3],r[:,:,3])
+        if ms is not None:
+            mw=int((rex-lex)*1.2)+40; mh=int(mw*0.3)+20
+            mx,my=nx-mw//2,ny-3
+            if 0<=mx<iw-mw and 0<=my<ih-mh:
+                m=cv2.resize(ms,(mw,mh),cv2.INTER_CUBIC)
+                frame[my:my+mh,mx:mx+mw]=overlay_image(frame[my:my+mh,mx:mx+mw],m[:,:,:3],m[:,:,3])
 
-    # ------------------- GLITCH ------------------- #
-    elif current_filter == "glitch":
-        hh, ww, _ = frame.shape
-        glitch_frame = frame.copy()
-        for i_col in range(0, ww, random.randint(20, 100)):
-            y_offset = random.randint(-10, 10)
-            glitch_frame[:, i_col:i_col+20] = np.roll(glitch_frame[:, i_col:i_col+20], y_offset, axis=0)
-        frame[:] = glitch_frame
+    # cat/dog
+    elif current_filter in ("cat","dog"):
+        if current_filter=="dog":
+            if (bly-tly)>15 and "tongue" in fdata:
+                tw=int(ew*0.6); th=int(tw*0.6)
+                tx=(lex+rex)//2-tw//2; ty=ny+int(th*0.6)
+                if 0<=tx<iw-tw and 0<=ty<ih-th:
+                    timg=cv2.resize(fdata["tongue"],(tw,th),cv2.INTER_CUBIC)
+                    frame[ty:ty+th,tx:tx+tw]=overlay_image(frame[ty:ty+th,tx:tx+tw],timg[:,:,:3],timg[:,:,3])
+        for part,off in [("left_ear",-ew),("right_ear",0)]:
+            if part in fdata:
+                ex,ey=fx+off,fy-int(eh*0.9)
+                if 0<=ex<iw-ew and 0<=ey<ih-eh:
+                    eimg=cv2.resize(fdata[part],(ew,eh),cv2.INTER_CUBIC)
+                    frame[ey:ey+eh,ex:ex+ew]=overlay_image(frame[ey:ey+eh,ex:ex+ew],eimg[:,:,:3],eimg[:,:,3])
+        if "nose" in fdata:
+            nw=int(ew*0.7); nh=int(nw*0.5)
+            nxp, nyp=(lex+rex)//2-nw//2,ny-nh//2
+            if 0<=nxp<iw-nw and 0<=nyp<ih-nh:
+                nimg=cv2.resize(fdata["nose"],(nw,nh),cv2.INTER_CUBIC)
+                frame[nyp:nyp+nh,nxp:nxp+nw]=overlay_image(frame[nyp:nyp+nh,nxp:nxp+nw],nimg[:,:,:3],nimg[:,:,3])
 
-    # ------------------- SKETCH ------------------- #
-    elif current_filter == "sketch":
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        inverted_gray = cv2.bitwise_not(gray)
-        blurred = cv2.GaussianBlur(inverted_gray, (111, 111), 0)
-        inverted_blurred = cv2.bitwise_not(blurred)
-        sk = cv2.divide(gray, inverted_blurred, scale=256.0)
-        frame[:] = cv2.cvtColor(sk, cv2.COLOR_GRAY2BGR)
-
-    # ------------------- COWBOY ------------------- #
-    elif current_filter == "cowboy":
-        hat_img = filter_data.get("hat", None)
-        if hat_img is not None:
-            hat_width  = int((right_eye_x - left_eye_x) * 2.5)+40
-            hat_height = int(hat_width * 0.6) + 20
-            hat_resized = cv2.resize(hat_img, (hat_width, hat_height), interpolation=cv2.INTER_CUBIC)
-            hat_rgb  = hat_resized[:, :, :3]
-            hat_mask = hat_resized[:, :, 3]
-            hx = forehead_x - hat_width // 2
-            hy = forehead_y - hat_height + 10
-            if 0 <= hx < iw - hat_width and 0 <= hy < ih - hat_height:
-                roi = frame[hy:hy + hat_height, hx:hx + hat_width]
-                if roi.size > 0:
-                    frame[hy:hy + hat_height, hx:hx + hat_width] = overlay_image(roi, hat_rgb, hat_mask)
-
-        glass = filter_data.get("glasses", None)
-        if glass is not None:
-            glass_width  = int((right_eye_x - left_eye_x) * 2.0)
-            glass_height = int(glass_width * 0.4) + 40
-            glass_resized = cv2.resize(glass, (glass_width, glass_height), interpolation=cv2.INTER_CUBIC)
-            glass_rgb  = glass_resized[:, :, :3]
-            glass_mask = glass_resized[:, :, 3]
-            gx = left_eye_x - int(glass_width * 0.25)
-            gy = left_eye_y - int(glass_height / 2) + 10
-            if 0 <= gx < iw - glass_width and 0 <= gy < ih - glass_height:
-                roi = frame[gy:gy + glass_height, gx:gx + glass_width]
-                if roi.size > 0:
-                    frame[gy:gy + glass_height, gx:gx + glass_width] = overlay_image(roi, glass_rgb, glass_mask)
-
-        mustache_img = filter_data.get("mustache", None)
-        if mustache_img is not None:
-            mustache_width = int((right_eye_x - left_eye_x) * 1.2)+40
-            mustache_height= int(mustache_width * 0.3) + 20
-            mustache_resized = cv2.resize(mustache_img, (mustache_width, mustache_height), interpolation=cv2.INTER_CUBIC)
-            mustache_rgb  = mustache_resized[:, :, :3]
-            mustache_mask = mustache_resized[:, :, 3]
-            mx = nose_x - mustache_width // 2
-            my = nose_y -3
-            if 0 <= mx < iw - mustache_width and 0 <= my < ih - mustache_height:
-                roi = frame[my:my + mustache_height, mx:mx + mustache_width]
-                if roi.size > 0:
-                    frame[my:my + mustache_height, mx:mx + mustache_width] = overlay_image(roi, mustache_rgb, mustache_mask)
-
-    # ------------------- CAT / DOG ------------------- #
-    elif current_filter in ["cat", "dog"]:
-        # If dog => check mouth open => add tongue
-        if current_filter == "dog":
-            mouth_open = (bottom_lip_y - top_lip_y) > 15
-            if mouth_open and "tongue" in filter_data:
-                tongue_img = filter_data["tongue"]
-                tongue_width  = int(ear_width * 0.6)
-                tongue_height = int(tongue_width * 0.6)
-                tx = int((left_eye_x + right_eye_x) / 2) - tongue_width // 2
-                ty = nose_y + int(tongue_height * 0.6)
-                tongue_resized = cv2.resize(tongue_img, (tongue_width, tongue_height), interpolation=cv2.INTER_CUBIC)
-                tongue_rgb  = tongue_resized[:, :, :3]
-                tongue_mask = tongue_resized[:, :, 3]
-                if 0 <= tx < iw - tongue_width and 0 <= ty < ih - tongue_height:
-                    roi = frame[ty:ty + tongue_height, tx:tx + tongue_width]
-                    if roi.size > 0:
-                        frame[ty:ty + tongue_height, tx:tx + tongue_width] = overlay_image(roi, tongue_rgb, tongue_mask)
-
-        # Ears
-        for part, x_offset in [("left_ear", -ear_width), ("right_ear", 0)]:
-            if part in filter_data:
-                part_img = filter_data[part]
-                resized = cv2.resize(part_img, (ear_width, ear_height), interpolation=cv2.INTER_CUBIC)
-                rgb  = resized[:, :, :3]
-                mask = resized[:, :, 3]
-                ex = forehead_x + x_offset
-                ey = forehead_y - int(ear_height * 0.9)
-                if 0 <= ex < iw - ear_width and 0 <= ey < ih - ear_height:
-                    roi = frame[ey:ey + ear_height, ex:ex + ear_width]
-                    if roi.size > 0:
-                        frame[ey:ey + ear_height, ex:ex + ear_width] = overlay_image(roi, rgb, mask)
-
-        # Nose
-        if "nose" in filter_data:
-            nose_img = filter_data["nose"]
-            nose_width  = int(ear_width * 0.7)
-            nose_height = int(nose_width * 0.5)
-            nose_resized = cv2.resize(nose_img, (nose_width, nose_height), interpolation=cv2.INTER_CUBIC)
-            nose_rgb  = nose_resized[:, :, :3]
-            nose_mask = nose_resized[:, :, 3]
-            nx = int((left_eye_x + right_eye_x) / 2) - nose_width // 2
-            ny = nose_y - nose_height // 2
-            if 0 <= nx < iw - nose_width and 0 <= ny < ih - nose_height:
-                roi = frame[ny:ny + nose_height, nx:nx + nose_width]
-                if roi.size > 0:
-                    frame[ny:ny + nose_height, nx:nx + nose_width] = overlay_image(roi, nose_rgb, nose_mask)
-
-    # ------------------- ORIGINAL ------------------- #
-    elif current_filter == "Original":
-        pass  # no effect
+    # Original: do nothing
 
 ################################################################################
-#                                 MAIN LOOP                                    #
+#                                  MAIN LOOP                                   #
 ################################################################################
 
 cv2.namedWindow("Face Filter App 😺🐶🤓")
-cv2.setMouseCallback("Face Filter App 😺🐶🤓", mouse_callback)
+cv2.setMouseCallback("Face Filter App 😺🐶🤓", mouse_cb)
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)  # fallback in case of error
+        frame = np.zeros((480,640,3),dtype=np.uint8)
+    frame = cv2.flip(frame,1)
 
-    # Flip horizontally (mirror effect)
-    frame = cv2.flip(frame, 1)
+    rgb       = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+    faces     = face_mesh.process(rgb)
+    hands_res = hands.process(rgb)
+    ih, iw,_  = frame.shape
 
-    # Convert to RGB for MediaPipe
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results_face = face_mesh.process(rgb_frame)
-    results_hand = hands.process(rgb_frame)
-
-    ih, iw, _ = frame.shape
-
-    # If filter changed to/from cowboy, handle music
-    # last_filterglobal 
-    if current_filter != last_filter:
+    # music switch
+    if current_filter!=last_filter:
         pygame.mixer.stop()
-        if current_filter == "cowboy":
+        if current_filter=="cowboy":
             cowboy_music.play(-1)
-        last_filter = current_filter
+        elif current_filter=="chath":
+            chath_music.play(-1)
+        last_filter=current_filter
 
-    # HAND RAISE DETECTION
-    hand_is_raised = False
-    if results_hand.multi_hand_landmarks:
-        for hand_landmarks in results_hand.multi_hand_landmarks:
-            wrist_y  = hand_landmarks.landmark[0].y  * ih
-            index_y  = hand_landmarks.landmark[8].y  * ih
-            if index_y < wrist_y:
-                hand_is_raised = True
+    # hand raise
+    raised=False
+    if hands_res.multi_hand_landmarks:
+        for hl in hands_res.multi_hand_landmarks:
+            if hl.landmark[8].y*ih < hl.landmark[0].y*ih:
+                raised=True
 
-    # FACE => apply filter
-    if results_face.multi_face_landmarks:
-        for face_landmarks in results_face.multi_face_landmarks:
-            apply_filter_logic(frame, iw, ih, face_landmarks)
+    # apply filter
+    if faces.multi_face_landmarks:
+        apply_filter_logic(frame, iw, ih, faces.multi_face_landmarks[0])
 
-    # COUNTDOWN / COOLDOWN
-    current_time = time.time()
-    # global timer_started, countdown_start, cooldown, cooldown_start
-    # global last_beep_time
-
-    if hand_is_raised and not timer_started and not cooldown:
-        timer_started = True
-        countdown_start = current_time
-        last_beep_time = -1
-
+    # countdown & snapshot
+    now=time.time()
+    if raised and not timer_started and not cooldown:
+        timer_started=True; countdown_start=now; last_beep_time=-1
     if timer_started:
-        elapsed = int(current_time - countdown_start)
-        time_left = COUNTDOWN_TIME - elapsed
-        if time_left > 0:
-            cv2.putText(frame, str(time_left), (50, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX, 3,
-                        (0, 0, 255), 5)
-            if elapsed != last_beep_time:
+        el=int(now-countdown_start)
+        tl=COUNTDOWN_TIME-el
+        if tl>0:
+            cv2.putText(frame,str(tl),(50,100),cv2.FONT_HERSHEY_SIMPLEX,3,(0,0,255),5)
+            if el!=last_beep_time:
                 if not pygame.mixer.get_busy():
                     beep.play()
-                last_beep_time = elapsed
+                last_beep_time=el
         else:
-            # time up => snap a photo
             save_picture(frame)
-            timer_started = False
-            cooldown = True
-            cooldown_start = current_time
+            timer_started=False; cooldown=True; cooldown_start=now
+    if cooldown and (now-cooldown_start>COOLDOWN_TIME):
+        cooldown=False
 
-    if cooldown and (current_time - cooldown_start > COOLDOWN_TIME):
-        cooldown = False
+    # UI & display
+    draw_panel(frame)
+    draw_toggle(frame)
 
-    # UI: Draw panel & toggle
-    draw_filter_panel(frame)
-    draw_toggle_button(frame)
-
-    # Show
     cv2.imshow("Face Filter App 😺🐶🤓", frame)
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord('q'):
+    k=cv2.waitKey(1)&0xFF
+    if k==ord('q'):
         break
-    # Press 's' to save a picture manually
-    if key == ord('s'):
+    if k==ord('s'):
         save_picture(frame)
 
 cap.release()
 cv2.destroyAllWindows()
+pygame.mixer.quit()

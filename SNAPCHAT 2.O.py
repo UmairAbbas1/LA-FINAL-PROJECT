@@ -68,6 +68,11 @@ filters = {
     "chath": {},  # filled below
     # effect filters
     "vintage"      : {},
+    "mirror"      : {},
+    "pixelate"      : {},
+    "old_film"      : {},
+    "thermal"      : {},
+    "galaxy"      : {},
     "brighten"     : {},
     "Black & white": {},
     "cartoon"      : {},
@@ -299,7 +304,48 @@ def apply_filter_logic(frame, iw, ih, landmarks):
         h,s,v=cv2.split(hsv)
         v=np.clip(v+30,0,255).astype(np.uint8)
         frame[:]=cv2.cvtColor(cv2.merge((h,s,v)),cv2.COLOR_HSV2BGR)
+   elif current_filter == "pixelate":
+        height, width = frame.shape[:2]
+        # Reduce block size to make the pixelation less blurry
+        block_size = 7  # Decrease block size for less pixelation
+        small = cv2.resize(frame, (width // block_size, height // block_size), interpolation=cv2.INTER_LINEAR)
+        frame[:] = cv2.resize(small, (width, height), interpolation=cv2.INTER_NEAREST)
 
+    # ---------------------- MIRROR EFFECT ---------------------- #
+    elif current_filter == "mirror":
+        height, width = frame.shape[:2]
+        # Create a mirrored version of the frame
+        frame[:] = cv2.flip(frame, 1)
+
+    # ---------------------- OLD FILM ---------------------- #
+    elif current_filter == "old_film":
+        # Apply a sepia filter
+        sepia_filter = np.array([[0.393, 0.769, 0.189],
+                                 [0.349, 0.686, 0.168],
+                                 [0.272, 0.534, 0.131]])
+        sepia = cv2.transform(frame, sepia_filter)
+        sepia = np.clip(sepia, 0, 255).astype(np.uint8)
+
+        # Add random noise to simulate film grain (reduced intensity for less grain)
+        noise = np.random.normal(0, 2, sepia.shape).astype(np.uint8)  # Reduced noise intensity
+        frame[:] = cv2.add(sepia, noise)
+
+
+    # ---------------------- THERMAL ---------------------- #
+    elif current_filter == "thermal":
+        # Convert the image to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Apply a colormap to simulate a thermal vision effect
+        frame[:] = cv2.applyColorMap(gray, cv2.COLORMAP_JET)
+
+    # ---------------------- GALAXY ---------------------- #
+    elif current_filter == "galaxy" and galaxy_img is not None:
+        # Resize the galaxy image to match the frame
+        galaxy_resized = cv2.resize(galaxy_img, (frame.shape[1], frame.shape[0]))
+        
+        # Apply some transparency effect to blend the galaxy into the frame
+        frame[:] = cv2.addWeighted(frame, 0.3, galaxy_resized, 0.7, 0)
     # negative
     elif current_filter=="negative":
         frame[:]=cv2.bitwise_not(frame)

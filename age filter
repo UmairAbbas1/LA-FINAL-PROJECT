@@ -1,0 +1,168 @@
+// add this on top
+import insightface
+from insightface.app import FaceAnalysis
+################################################################################
+#                               INITIAL SETUP                                  #
+################################################################################
+
+
+face_app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
+face_app.prepare(ctx_id=0, det_size=(640, 640))
+
+// after this def mouse_cb
+
+
+age_model = cv2.dnn.readNetFromCaffe(
+    r"C:\second semester\Linear Algebra\LA final project\age_deploy.prototxt",
+    r"C:\second semester\Linear Algebra\LA final project\age_net.caffemodel"
+)
+AGE_BUCKETS = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(21-24)', '(25-32)', '(33-37)', '(38-43)', '(44-47)', '(48-53)', '(60-100)']
+def apply_filter_logic(frame, iw, ih, landmarks):
+    global current_filter
+    le, re = landmarks.landmark[33], landmarks.landmark[263]
+    nt, fh = landmarks.landmark[1], landmarks.landmark[10]
+    tl, bl = landmarks.landmark[13], landmarks.landmark[14]
+    lex,ley = int(le.x*iw), int(le.y*ih)
+    rex,rey = int(re.x*iw), int(re.y*ih)
+    nx,ny   = int(nt.x*iw), int(nt.y*ih)
+    fx,fy   = int(fh.x*iw), int(fh.y*ih)
+    tly,bly = int(tl.y*ih), int(bl.y*ih)
+    ew = int((rex-lex)*1.8); eh=int(ew*0.75)
+    fdata = filters[current_filter]
+
+    # vintage
+    if current_filter=="vintage":
+        sep=cv2.transform(frame,np.array([[0.272,0.534,0.131],[0.349,0.686,0.168],[0.393,0.769,0.189]]))
+        frame[:]=np.clip(sep,0,255).astype(np.uint8)
+
+
+    elif current_filter == "age":
+        left_eye = landmarks.landmark[33]
+        right_eye = landmarks.landmark[263]
+        nose_tip = landmarks.landmark[1]
+        forehead = landmarks.landmark[10]
+        bottom_lip = landmarks.landmark[14]
+
+        left_eye_x = int(left_eye.x * iw)
+        left_eye_y = int(left_eye.y * ih)
+        right_eye_x = int(right_eye.x * iw)
+        right_eye_y = int(right_eye.y * ih)
+        nose_x = int(nose_tip.x * iw)
+        nose_y = int(nose_tip.y * ih)
+        bottom_lip_y = int(bottom_lip.y * ih)
+        forehead_y = int(forehead.y * ih)
+
+        # Define the bounding box for the face based on landmarks
+        face_width = abs(right_eye_x - left_eye_x) * 2
+        face_height = abs(bottom_lip_y - forehead_y) * 1.5
+
+        x1 = max(nose_x - int(face_width / 2), 0)
+        y1 = max(forehead_y - int(face_height / 3), 0)
+        x2 = min(nose_x + int(face_width / 2), iw)
+        y2 = min(bottom_lip_y + int(face_height / 3), ih)
+
+        face = frame[y1:y2, x1:x2]
+
+        if face.size > 0:
+            # Prepare the input for the model
+            blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), (78.426337, 87.768914, 114.895847), swapRB=False)
+            age_model.setInput(blob)
+            age_preds = age_model.forward()
+
+            # Get the age bucket
+            age = AGE_BUCKETS[age_preds[0].argmax()]
+
+            # Overlay the age text on the frame
+            cv2.putText(frame, f"Age: {age}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            
+    # ---------------------- MIRROR EFFECT ---------------------- #
+    elif current_filter == "mirror":
+        height, width = frame.shape[:2]
+        # Create a mirrored version of the frame
+        frame[:] = cv2.flip(frame, 1)
+
+    # ---------------------- OLD FILM ---------------------- #
+    elif current_filter == "old_film":
+        # Apply a sepia filter
+        sepia_filter = np.array([[0.393, 0.769, 0.189],
+                                 [0.349, 0.686, 0.168],
+                                 [0.272, 0.534, 0.131]])
+        sepia = cv2.transform(frame, sepia_filter)
+        sepia = np.clip(sepia, 0, 255).astype(np.uint8)
+
+        # Add random noise to simulate film grain (reduced intensity for less grain)
+        noise = np.random.normal(0, 2, sepia.shape).astype(np.uint8)  # Reduced noise intensity
+        frame[:] = cv2.add(sepia, noise)
+
+
+    # ---------------------- THERMAL ---------------------- #
+    elif current_filter == "thermal":
+        # Convert the image to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Apply a colormap to simulate a thermal vision effect
+        frame[:] = cv2.applyColorMap(gray, cv2.COLORMAP_JET)
+
+    # ---------------------- GALAXY ---------------------- #
+    elif current_filter == "galaxy" and galaxy_img is not None:
+        # Resize the galaxy image to match the frame
+        galaxy_resized = cv2.resize(galaxy_img, (frame.shape[1], frame.shape[0]))
+        
+        # Apply some transparency effect to blend the galaxy into the frame
+        frame[:] = cv2.addWeighted(frame, 0.3, galaxy_resized, 0.7, 0)
+
+    # cowboy
+    elif current_filter=="cowboy":
+        hat=fdata.get("hat"); ms=fdata.get("mustache")
+        if hat is not None:
+            hw=int((rex-lex)*2.5)+40; hh=int(hw*0.6)+20
+            hx,hy=fx-hw//2,fy-hh+10
+            if 0<=hx<iw-hw and 0<=hy<ih-hh:
+                r=cv2.resize(hat,(hw,hh),cv2.INTER_CUBIC)
+                frame[hy:hy+hh,hx:hx+hw]=overlay_image(frame[hy:hy+hh,hx:hx+hw],r[:,:,:3],r[:,:,3])
+        if ms is not None:
+            mw=int((rex-lex)*1.2)+40; mh=int(mw*0.3)+20
+            mx,my=nx-mw//2,ny-3
+            if 0<=mx<iw-mw and 0<=my<ih-mh:
+                m=cv2.resize(ms,(mw,mh),cv2.INTER_CUBIC)
+                frame[my:my+mh,mx:mx+mw]=overlay_image(frame[my:my+mh,mx:mx+mw],m[:,:,:3],m[:,:,3])
+
+    # cat/dog
+    elif current_filter in ("cat","dog"):
+        if current_filter=="dog":
+            if (bly-tly)>15 and "tongue" in fdata:
+                tw=int(ew*0.6); th=int(tw*0.6)
+                tx=(lex+rex)//2-tw//2; ty=ny+int(th*0.6)
+                if 0<=tx<iw-tw and 0<=ty<ih-th:
+                    timg=cv2.resize(fdata["tongue"],(tw,th),cv2.INTER_CUBIC)
+                    frame[ty:ty+th,tx:tx+tw]=overlay_image(frame[ty:ty+th,tx:tx+tw],timg[:,:,:3],timg[:,:,3])
+        for part,off in [("left_ear",-ew),("right_ear",0)]:
+           if part in fdata:
+            # Get the image corresponding to the part
+            image_part = fdata[part]
+
+            # Check if the image is a valid NumPy array and not empty
+            if isinstance(image_part, np.ndarray) and image_part.size > 0:
+                # Calculate the position to place the overlay
+                ex, ey = fx + off, fy - int(eh * 0.9)
+                
+                # Check if the overlay position is within bounds
+                if 0 <= ex < iw - ew and 0 <= ey < ih - eh:
+                    # Resize the image part to fit the face area
+                    eimg = cv2.resize(image_part, (ew, eh), cv2.INTER_CUBIC)
+                    
+                    # Overlay the resized image onto the frame
+                    frame[ey:ey + eh, ex:ex + ew] = overlay_image(frame[ey:ey + eh, ex:ex + ew], eimg[:, :, :3], eimg[:, :, 3])
+               # else:
+                 #   print(f"Error: Overlay position out of bounds: {ex}, {ey}")
+           # else:
+               # print(f"Error: {part} is not a valid image or is empty.")
+       # else:
+           # print(f"Error: {part} not found in fdata.")
+
+        if "nose" in fdata:
+            nw=int(ew*0.7); nh=int(nw*0.5)
+            nxp, nyp=(lex+rex)//2-nw//2,ny-nh//2
+            if 0<=nxp<iw-nw and 0<=nyp<ih-nh:
+                nimg=cv2.resize(fdata["nose"],(nw,nh),cv2.INTER_CUBIC)
+                frame[nyp:nyp+nh,nxp:nxp+nw]=overlay_image(frame[nyp:nyp+nh,nxp:nxp+nw],nimg[:,:,:3],nimg[:,:,3])

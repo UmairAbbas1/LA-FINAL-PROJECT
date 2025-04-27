@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snapchat 2.0</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Poppins:wght@400;600&family=Exo:wght@700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- Splash Screen -->
+  <div id="splash-screen">
+    <h1 id="app-title">Snapchat 2.0</h1>
+    <div id="particles-js"></div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app-container" class="hidden">
+    <header>
+      <h1>Snapchat 2.0</h1>
+      <div class="header-controls">
+        <button id="theme-toggle" aria-label="Toggle Theme">🌙</button>
+        <button id="toggle-panel" aria-label="Toggle Filters">☰</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+      <section id="video-container">
+        <img id="video-feed" src="/video_feed" alt="Live camera feed" />
+      </section>
+      <section id="gallery">
+        <h2>Your Snaps</h2>
+        <div id="snaps"></div>
+      </section>
+    </main>
+
+    <!-- Snap Button -->
+    <div id="snap-container">
+      <button id="snap-btn" title="Take Snap">
+        <span class="ripple"></span>
+        📸
+      </button>
+    </div>
+
+    <!-- Filter Carousel -->
+    <div id="filter-carousel">
+      <div id="filters"></div>
+    </div>
+  </div>
+
+  <!-- External Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

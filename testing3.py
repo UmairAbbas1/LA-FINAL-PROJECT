@@ -6,16 +6,21 @@ import os
 import time
 import random
 
-# ─── INITIAL SETUP ─────────────────────────────────────────────────────────────
-BASE_DIR = r"C:\second semester\Linear Algebra\LA-FINAL-PROJECT"
-PIC_DIR  = os.path.join(BASE_DIR, "static", "Pictures")
+
+
+# Example base directory (ensure this is correct)
+BASE_DIR = "C:\second semester\Linear Algebra\LA-FINAL-PROJECT"
+
+
+HERE    = os.path.dirname(os.path.abspath(_file_))
+PIC_DIR = os.path.join(HERE, "static", "Pictures")
 os.makedirs(PIC_DIR, exist_ok=True)
 
 pygame.init()
-beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
-click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
-cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
-chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
+beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "C:\second semester\Linear Algebra\LA-FINAL-PROJECT\Beep.wav"))
+click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "C:\second semester\Linear Algebra\LA-FINAL-PROJECT\iphone-camera-capture-6448.wav"))
+cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "C:\second semester\Linear Algebra\LA-FINAL-PROJECT\cowboy_music.wav"))
+chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "C:\second semester\Linear Algebra\LA-FINAL-PROJECT\BADO BADI.wav"))
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
@@ -38,28 +43,28 @@ def png(path):
 # sticker filters
 filters = {
     "cat": {
-        "left_ear" : png("left.png"),
-        "right_ear": png("right.png"),
-        "nose"     : png("nose.png"),
+        "left_ear" : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\left.png"),
+        "right_ear": png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\right.png"),
+        "nose"     : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\nose.png"),
     },
     "dog": {
-        "left_ear" : png("Dogleft.png"),
-        "right_ear": png("Dogright.png"),
-        "nose"     : png("Dognose.png"),
-        "tongue"   : png("tongue.png"),
+        "left_ear" : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\Dogleft.png"),
+        "right_ear": png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\Dogright.png"),
+        "nose"     : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\Dognose.png"),
+        "tongue"   : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\tongue.png"),
     },
     "glasses": {
-        "glass": png("Glasses.png"),
+        "glass": png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\Glasses.png"),
     },
     "cowboy": {
-        "hat"     : png("cowboy_hat.png"),
-        "mustache": png("moustache.png"),
+        "hat"     : png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\cowboy_hat.png"),
+        "mustache": png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\moustache.png"),
     },
     # chath below
 }
 
 # load CHATH sticker
-CH = png("CHATH.png")
+CH = png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\CHATH.png")
 alpha = CH[:, :, 3]
 mask_ch = (alpha > 200).astype(np.uint8) * 255
 cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -79,7 +84,7 @@ for name in effect_names:
     filters[name] = {}
 
 # galaxy background for galaxy filter
-galaxy_img = png("galaxy.png")
+galaxy_img = png("C:\second semester\Linear Algebra\LA-FINAL-PROJECT\galaxy.jpg")
 if galaxy_img is None:
     galaxy_img = np.zeros((480,640,3), dtype=np.uint8)
 
@@ -136,7 +141,7 @@ def apply_filter_logic(frame, iw, ih, lm):
     # ───── glasses ─────
     elif current_filter == "glasses" and "glass" in fdata:
         g = fdata["glass"]
-        gw, gh = int((rex-lex)*2), int((rex-lex)*0.4)
+        gw, gh = int((rex-lex)*2)+20, int((rex-lex)*0.4)
         r = cv2.resize(g, (gw,gh), interpolation=cv2.INTER_CUBIC)
         rgb, mask = r[:,:,:3], r[:,:,3]
         gx, gy = lex-int(gw*0.25), ley-gh//2
@@ -382,4 +387,6 @@ def save_snapshot():
     path  = os.path.join(PIC_DIR, fname)
     cv2.imwrite(path, frame)
     click.play()
-    return fname
+
+
+return fname

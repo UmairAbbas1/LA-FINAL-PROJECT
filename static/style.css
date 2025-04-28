@@ -14,6 +14,11 @@ body {
   position: relative;
 }
 
+#app-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* Splash Screen */
 #splash-screen {
   position: fixed;
@@ -73,8 +78,7 @@ header h1 {
   gap: 1rem;
 }
 
-#theme-toggle,
-#toggle-panel {
+#theme-toggle {
   font-size: 1.5rem;
   background: rgba(255, 255, 255, 0.2);
   border: none;
@@ -84,8 +88,7 @@ header h1 {
   transition: transform 0.3s, background 0.3s;
 }
 
-#theme-toggle:hover,
-#toggle-panel:hover {
+#theme-toggle:hover {
   transform: scale(1.1);
   background: rgba(255, 255, 255, 0.3);
 }
@@ -100,6 +103,7 @@ header h1 {
   position: fixed;
   bottom: 0;
   width: 100%;
+  max-height: 200px;
   overflow-x: auto;
   white-space: nowrap;
   padding: 0.5rem 1rem;
@@ -107,20 +111,13 @@ header h1 {
   backdrop-filter: blur(5px);
   z-index: 5;
   user-select: none;
-  transition: transform 0.5s;
-}
-
-#filter-carousel.open {
-  transform: translateY(0);
-}
-
-#filter-carousel:not(.open) {
-  transform: translateY(100%);
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on touch devices */
 }
 
 #filters {
   display: inline-flex;
   gap: 1rem;
+  align-items: center;
 }
 
 .filter-item {
@@ -184,7 +181,8 @@ header h1 {
 main {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: calc(100% - 70px);
+  height: calc(100vh - 70px);
+  max-height: calc(100vh - 70px);
 }
 
 /* Video Container */
@@ -194,6 +192,7 @@ main {
   justify-content: center;
   align-items: center;
   background: #000;
+  max-height: calc(100vh - 70px);
 }
 
 #video-feed {
@@ -201,30 +200,32 @@ main {
   max-width: 600px;
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  transition: opacity 0.3s ease;
 }
 
-/* Snap Button */
+/* Capture Controls */
 #snap-container {
   position: fixed;
-  bottom: 3.5rem; /* Above filter carousel */
+  bottom: 4.5rem; /* Adjusted to avoid overlap with always-visible filter carousel */
   width: 100%;
   display: flex;
   justify-content: center;
+  gap: 1rem;
   z-index: 6;
 }
 
-#snap-btn {
-  font-size: 2.5rem;
+#snap-btn, #video-btn, #boomerang-btn {
+  font-size: 2rem;
   background: linear-gradient(45deg, #ff6f61, #ffcc00);
   border: none;
   border-radius: 50%;
-  padding: 1.2rem;
+  padding: 1rem;
   cursor: pointer;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
   transition: transform 0.3s;
 }
 
-#snap-btn:hover {
+#snap-btn:hover, #video-btn:hover, #boomerang-btn:hover {
   transform: scale(1.1);
 }
 
@@ -244,6 +245,23 @@ main {
   padding: 2rem;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.3);
+  max-height: calc(100vh - 70px);
+  transition: all 0.5s ease;
+}
+
+#gallery.full-screen {
+  position: fixed;
+  top: 70px;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 70px);
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+#gallery.full-screen #snaps {
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
 }
 
 #gallery h2 {
@@ -273,48 +291,323 @@ main {
   transform: rotate(0) scale(1.05);
 }
 
-.snap-item img {
+.snap-item img, .snap-item video {
   width: 100%;
   border-radius: 5px;
 }
 
+.download-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  border-radius: 50%;
+  padding: 0.3rem;
+  cursor: pointer;
+  transition: transform 0.3s, background 0.3s;
+}
+
+.download-btn:hover {
+  transform: scale(1.2);
+  background: #ffcc00;
+}
+
+/* Flash Effect */
+#flash-effect {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Editor Modal */
+#editor-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+}
+
+#editor-modal.hidden {
+  display: none;
+}
+
+.editor-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 15px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 600px;
+}
+
+.editor-content h3 {
+  font-family: 'Orbitron', sans-serif;
+  color: #ff6f61;
+  margin-bottom: 1rem;
+}
+
+#editor-canvas {
+  width: 100%;
+  height: 300px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin-bottom: 1rem;
+  cursor: crosshair; /* Pinpoint cursor for editing */
+}
+
+#editor-tools {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.tool-btn {
+  padding: 0.5rem 1rem;
+  background: #ccc;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.tool-btn.active {
+  background: #ff6f61;
+  color: #fff;
+}
+
+#erase-sticker-tool {
+  padding: 0.5rem 1rem;
+  background: #ccc;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+#erase-sticker-tool.active {
+  background: #ff6f61;
+  color: #fff;
+}
+
+#draw-color, #sticker-select, #text-input {
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+#sticker-select.hidden, #text-input.hidden {
+  display: none;
+}
+
+.editor-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+#editor-save, #editor-cancel {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Exo', sans-serif;
+  transition: background 0.3s;
+}
+
+#editor-save {
+  background: #ff6f61;
+  color: #fff;
+}
+
+#editor-save:hover {
+  background: #ffcc00;
+}
+
+#editor-cancel {
+  background: #ccc;
+  color: #333;
+}
+
+#editor-cancel:hover {
+  background: #aaa;
+}
+
+/* Tutorial Modal */
+#tutorial-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+}
+
+#tutorial-modal.hidden {
+  display: none;
+}
+
+.tutorial-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 15px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 400px;
+}
+
+.tutorial-content h3 {
+  font-family: 'Orbitron', sans-serif;
+  color: #ff6f61;
+  margin-bottom: 1rem;
+}
+
+.tutorial-step {
+  margin-bottom: 1rem;
+}
+
+.tutorial-step.hidden {
+  display: none;
+}
+
+.tutorial-step p {
+  font-family: 'Poppins', sans-serif;
+  color: #333;
+}
+
+.tutorial-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+#tutorial-prev, #tutorial-next, #tutorial-skip {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Exo', sans-serif;
+  transition: background 0.3s;
+}
+
+#tutorial-prev.hidden {
+  visibility: hidden;
+}
+
+#tutorial-next, #tutorial-skip {
+  background: #ff6f61;
+  color: #fff;
+}
+
+#tutorial-prev {
+  background: #ccc;
+  color: #333;
+}
+
+#tutorial-next:hover, #tutorial-skip:hover {
+  background: #ffcc00;
+}
+
+#tutorial-prev:hover {
+  background: #aaa;
+}
+
+/* View All Button */
+.view-all-btn {
+  display: block;
+  margin: 1rem auto;
+  padding: 0.5rem 1rem;
+  background: #ff6f61;
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  font-family: 'Exo', sans-serif;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.view-all-btn:hover {
+  background: #ffcc00;
+}
+
 /* Dark Mode */
 body.dark-mode {
-  background: linear-gradient(135deg, #121212, #1e1e2f);
+  background: linear-gradient(135deg, #121212, #1c2526);
 }
 
 body.dark-mode header {
   background: rgba(0, 0, 0, 0.5);
 }
 
-body.dark-mode #filter-carousel {
-  background: rgba(0, 0, 0, 0.3);
+body.dark-mode #gallery {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-/* Responsive Design */
+body.dark-mode .snap-item {
+  background: #333;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ff6f61;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ffcc00;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
   main {
     grid-template-columns: 1fr;
   }
 
   #gallery {
-    max-height: 40vh;
+    padding: 1rem;
+  }
+
+  #video-feed {
+    width: 100%;
+  }
+
+  #snap-container {
+    bottom: 5rem; /* Adjusted for mobile to avoid carousel overlap */
   }
 
   #app-title {
     font-size: 2.5rem;
   }
 
-  #snap-container {
-    bottom: 3rem;
-  }
-
-  #filter-carousel {
-    padding: 0.3rem 1rem;
-  }
-
-  .filter-btn {
-    font-size: 0.9rem;
-    padding: 0.5rem 1rem;
+  header h1 {
+    font-size: 1.5rem;
   }
 }

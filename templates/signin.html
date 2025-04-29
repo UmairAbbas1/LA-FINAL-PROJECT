@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snapchat 2.O - Sign In</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .bounce { animation: bounce 0.5s ease infinite; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-yellow-100 font-sans">
+    <!-- Taskbar -->
+    <nav id="taskbar" class="bg-black text-yellow-300 p-4 flex justify-between items-center fixed w-full top-0 z-20">
+        <h1 class="text-xl font-bold">Snapchat 2.O 🐝</h1>
+        <div id="user-menu" class="hidden">
+            <span id="username" class="mr-4"></span>
+            <button id="signout-btn" class="bg-yellow-500 text-black px-4 py-2 rounded hover:bg-yellow-600">Sign Out</button>
+        </div>
+        <div id="signin-prompt">
+            <span class="mr-4">Not signed in!</span>
+            <button id="show-signin-btn" class="bg-yellow-500 text-black px-4 py-2 rounded hover:bg-yellow-600">Sign In</button>
+        </div>
+    </nav>
+
+    <!-- Sign-In/Sign-Up Form -->
+    <div class="min-h-screen flex items-center justify-center pt-16">
+        <div class="bg-black text-yellow-300 p-8 rounded-lg shadow-lg w-full max-w-md fade-in">
+            <h2 class="text-3xl font-bold mb-6 text-center">Buzz into Snapchat 2.O! 🐝</h2>
+            <!-- Tabs -->
+            <div class="flex mb-4">
+                <button id="signin-tab" class="w-1/2 py-2 text-center bg-yellow-500 text-black rounded-l-lg hover:bg-yellow-600">Sign In</button>
+                <button id="signup-tab" class="w-1/2 py-2 text-center bg-gray-800 hover:bg-gray-700 rounded-r-lg">Sign Up</button>
+            </div>
+            <!-- Sign-In Form -->
+            <div id="signin-form">
+                <form id="login-form">
+                    <div class="mb-4">
+                        <label for="login-email" class="block text-sm font-medium">Email</label>
+                        <input type="email" id="login-email" class="w-full p-2 mt-1 bg-yellow-100 text-black rounded focus:outline-none focus:ring-2 focus:ring-yellow-500" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="login-password" class="block text-sm font-medium">Password</label>
+                        <input type="password" id="login-password" class="w-full p-2 mt-1 bg-yellow-100 text-black rounded focus:outline-none focus:ring-2 focus:ring-yellow-500" required>
+                    </div>
+                    <div id="login-error" class="text-red-500 text-sm mb-4 hidden">Something wrong with email or password!</div>
+                    <button type="submit" class="w-full bg-yellow-500 text-black p-3 rounded hover:bg-yellow-600 transition duration-300 bounce">Sign In</button>
+                </form>
+                <p class="mt-4 text-center">Don't have an account? <a href="#" id="to-signup" class="underline hover:text-yellow-500">Sign Up</a></p>
+            </div>
+            <!-- Sign-Up Form -->
+            <div id="signup-form" class="hidden">
+                <form id="register-form">
+                    <div class="mb-4">
+                        <label for="signup-email" class="block text-sm font-medium">Email</label>
+                        <input type="email" id="signup-email" class="w-full p-2 mt-1 bg-yellow-100 text-black rounded focus:outline-none focus:ring-2 focus:ring-yellow-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="signup-password" class="block text-sm font-medium">Password</label>
+                        <input type="password" id="signup-password" class="w-full p-2 mt-1 bg-yellow-100 text-black rounded focus:outline-none focus:ring-2 focus:ring-yellow-500" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirm-password" class="block text-sm font-medium">Confirm Password</label>
+                        <input type="password" id="confirm-password" class="w-full p-2 mt-1 bg-yellow-100 text-black rounded focus:outline-none focus:ring-2 focus:ring-yellow-500" required>
+                    </div>
+                    <div id="signup-error" class="text-red-500 text-sm mb-4 hidden"></div>
+                    <button type="submit" class="w-full bg-yellow-500 text-black p-3 rounded hover:bg-yellow-600 transition duration-300 bounce">Sign Up</button>
+                </form>
+                <p class="mt-4 text-center">Already have an account? <a href="#" id="to-signin" class="underline hover:text-yellow-500">Sign In</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='taskbar.js') }}"></script>
+    <script>
+        // Redirect to main app if already logged in
+        const user = localStorage.getItem('user');
+        if (user) {
+            window.location.href = '/';
+        }
+
+        // Simple base64 hash for passwords (not secure for production)
+        function hashPassword(password) {
+            return btoa(password); // Base64 encoding
+        }
+
+        // Tab Switching
+        const signinTab = document.getElementById('signin-tab');
+        const signupTab = document.getElementById('signup-tab');
+        const signinForm = document.getElementById('signin-form');
+        const signupForm = document.getElementById('signup-form');
+        const toSignup = document.getElementById('to-signup');
+        const toSignin = document.getElementById('to-signin');
+
+        signinTab.addEventListener('click', () => {
+            signinForm.classList.remove('hidden');
+            signupForm.classList.add('hidden');
+            signinTab.classList.add('bg-yellow-500', 'text-black');
+            signinTab.classList.remove('bg-gray-800');
+            signupTab.classList.add('bg-gray-800');
+            signupTab.classList.remove('bg-yellow-500', 'text-black');
+            document.getElementById('login-error').classList.add('hidden');
+        });
+
+        signupTab.addEventListener('click', () => {
+            signupForm.classList.remove('hidden');
+            signinForm.classList.add('hidden');
+            signupTab.classList.add('bg-yellow-500', 'text-black');
+            signupTab.classList.remove('bg-gray-800');
+            signinTab.classList.add('bg-gray-800');
+            signinTab.classList.remove('bg-yellow-500', 'text-black');
+            document.getElementById('signup-error').classList.add('hidden');
+        });
+
+        toSignup.addEventListener('click', (e) => {
+            e.preventDefault();
+            signupTab.click();
+        });
+
+        toSignin.addEventListener('click', (e) => {
+            e.preventDefault();
+            signinTab.click();
+        });
+
+        // Sign-Up Form Submission
+        document.getElementById('register-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const errorDiv = document.getElementById('signup-error');
+
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match!';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Check if email already exists
+            let users = JSON.parse(localStorage.getItem('users') || '[]');
+            if (users.some(user => user.email === email)) {
+                errorDiv.textContent = 'Email already registered!';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Save user
+            const username = email.split('@')[0];
+            users.push({
+                email: email,
+                password: hashPassword(password),
+                username: username
+            });
+            localStorage.setItem('users', JSON.stringify(users));
+            localStorage.setItem('user', username);
+            document.cookie = `username=${encodeURIComponent(username)}; path=/; max-age=31536000`; // 1 year
+            console.log(`Set cookie: username=${username}`);
+            errorDiv.classList.add('hidden');
+            window.location.href = '/';
+        });
+
+        // Sign-In Form Submission
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            // Check credentials
+            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            const user = users.find(u => u.email === email && u.password === hashPassword(password));
+
+            if (!user) {
+                errorDiv.textContent = 'Something wrong with email or password!';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            localStorage.setItem('user', user.username);
+            document.cookie = `username=${encodeURIComponent(user.username)}; path=/; max-age=31536000`; // 1 year
+            console.log(`Set cookie: username=${user.username}`);
+            errorDiv.classList.add('hidden');
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html>

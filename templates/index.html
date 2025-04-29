@@ -1,103 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Snapchat 2.O</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Orbitron:wght@700&family=Exo:wght@700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snapchat 2.O</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Orbitron:wght@700&family=Exo:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
 </head>
-<body>
-  <!-- Splash Screen -->
-  <div id="splash-screen">
-    <h1 id="app-title">Snapchat 2.O</h1>
-    <div id="particles-js"></div>
-  </div>
-
-  <!-- Main App -->
-  <div id="app-container" class="hidden">
-    <header>
-      <h1>Snapchat 2.O</h1>
-      <div class="header-controls">
-        <button id="theme-toggle">🌙</button>
-      </div>
-    </header>
-
-    <main>
-      <section id="video-container">
-        <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
-        <div id="snap-container">
-          <button id="snap-btn">📸</button>
-          <button id="video-btn">🎥</button>
-          <button id="boomerang-btn">🔄</button>
+<body class="font-sans">
+    <!-- Taskbar -->
+    <nav id="taskbar" class="bg-black text-yellow-300 p-4 flex justify-between items-center fixed w-full top-0 z-20">
+        <h1 class="text-xl font-bold">Snapchat 2.O 🐝</h1>
+        <div id="user-menu" class="hidden">
+            <span id="username" class="mr-4"></span>
+            <button id="signout-btn" class="bg-yellow-500 text-black px-4 py-2 rounded hover:bg-yellow-600">Sign Out</button>
         </div>
-      </section>
+        <div id="signin-prompt">
+            <span class="mr-4">Not signed in!</span>
+            <button id="show-signin-btn" class="bg-yellow-500 text-black px-4 py-2 rounded hover:bg-yellow-600">Sign In</button>
+        </div>
+    </nav>
 
-      <section id="gallery">
-        <h2>Your Snaps</h2>
-        <div id="snaps"></div>
-        <button id="view-all-snaps" class="view-all-btn">View All Snaps</button>
-      </section>
-    </main>
-
-    <!-- Filter Carousel -->
-    <div id="filter-carousel">
-      <div id="filters"></div>
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <h1 id="app-title">Snapchat 2.O</h1>
+        <div id="particles-js"></div>
     </div>
 
-    <!-- Flash Effect -->
-    <div id="flash-effect"></div>
+    <!-- Main App -->
+    <div id="app-container" class="hidden pt-16">
+        <header>
+            <h1>Snapchat 2.O</h1>
+            <div class="header-controls">
+                <button id="theme-toggle">🌙</button>
+            </div>
+        </header>
 
-    <!-- Editor Modal -->
-    <div id="editor-modal" class="hidden">
-      <div class="editor-content">
-        <h3>Edit Your Snap</h3>
-        <canvas id="editor-canvas"></canvas>
-        <div id="editor-tools">
-          <button id="draw-tool" class="tool-btn">✏️</button>
-          <button id="sticker-tool" class="tool-btn">😺</button>
-          <button id="text-tool" class="tool-btn">🅰</button>
-          <button id="erase-sticker-tool" class="tool-btn">🗑️</button>
+        <main>
+            <section id="video-container">
+                <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+                <div id="snap-container">
+                    <button id="snap-btn">📸</button>
+                    <button id="video-btn">🎥</button>
+                    <button id="boomerang-btn">🔄</button>
+                </div>
+            </section>
+
+            <section id="gallery">
+                <h2>Your Snaps</h2>
+                <div id="snaps"></div>
+                <button id="view-all-snaps" class="view-all-btn">View All Snaps</button>
+            </section>
+        </main>
+
+        <!-- Filter Carousel -->
+        <div id="filter-carousel">
+            <div id="filters"></div>
         </div>
-        <input type="color" id="draw-color" value="#ff0000">
-        <select id="sticker-select" class="hidden">
-          <option value="😺">😺</option>
-          <option value="🐶">🐶</option>
-          <option value="⭐">⭐</option>
-          <option value="❤️">❤️</option>
-        </select>
-        <input type="text" id="text-input" class="hidden" placeholder="Enter text">
-        <div class="editor-buttons">
-          <button id="editor-save">Save</button>
-          <button id="editor-cancel">Cancel</button>
+
+        <!-- Flash Effect -->
+        <div id="flash-effect"></div>
+
+        <!-- Editor Modal -->
+        <div id="editor-modal" class="hidden">
+            <div class="editor-content">
+                <h3>Edit Your Snap</h3>
+                <canvas id="editor-canvas"></canvas>
+                <div id="editor-tools">
+                    <button id="draw-tool" class="tool-btn">✏️</button>
+                    <button id="sticker-tool" class="tool-btn">😺</button>
+                    <button id="text-tool" class="tool-btn">🅰</button>
+                    <button id="erase-sticker-tool" class="tool-btn">🗑️</button>
+                </div>
+                <input type="color" id="draw-color" value="#ff0000">
+                <select id="sticker-select" class="hidden">
+                    <option value="😺">😺</option>
+                    <option value="🐶">🐶</option>
+                    <option value="⭐">⭐</option>
+                    <option value="❤️">❤️</option>
+                </select>
+                <input type="text" id="text-input" class="hidden" placeholder="Enter text">
+                <div class="editor-buttons">
+                    <button id="editor-save">Save</button>
+                    <button id="editor-cancel">Cancel</button>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <!-- Tutorial Modal -->
+        <div id="tutorial-modal" class="hidden">
+            <div class="tutorial-content">
+                <h3>Buzz into Snapchat 2.O! 🐝</h3>
+                <div id="tutorial-step-1" class="tutorial-step">
+                    <p>Tap 📸 to snap, 🎥 for video, or 🔄 for a boomerang!</p>
+                </div>
+                <div id="tutorial-step-2" class="tutorial-step hidden">
+                    <p>Double-tap the video to switch filters or scroll the carousel below!</p>
+                </div>
+                <div id="tutorial-step-3" class="tutorial-step hidden">
+                    <p>Edit snaps with ✏️, 😺, or 🅰 (drag to move text)! Erase stickers with 🗑️.</p>
+                </div>
+                <div class="tutorial-buttons">
+                    <button id="tutorial-prev" class="hidden">Previous</button>
+                    <button id="tutorial-next">Next</button>
+                    <button id="tutorial-skip">Skip</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Modal -->
+        <div id="instructions-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+            <div class="bg-yellow-100 text-black p-8 rounded-lg max-w-lg w-full fade-in">
+                <h2 class="text-2xl font-bold mb-4">Welcome to Snapchat 2.O, New Bee! 🐝</h2>
+                <p class="mb-4">Ready to buzz around? Here's the quick scoop:</p>
+                <ul class="list-disc pl-6 mb-6">
+                    <li>🐝 <strong>Taskbar:</strong> See your name up top and sign out anytime!</li>
+                    <li>📸 <strong>Snaps:</strong> Hit 📸, 🎥, or 🔄 to capture fun moments!</li>
+                    <li>🎨 <strong>Filters:</strong> Scroll the bottom carousel or double-tap to try filters!</li>
+                    <li>✏️ <strong>Edit:</strong> Draw, add stickers, or drag text in the editor!</li>
+                    <li>⚡ <strong>Zippy Fun:</strong> No lag, just instant snap-tastic action!</li>
+                </ul>
+                <button id="close-instructions" class="bg-black text-yellow-300 p-3 rounded hover:bg-gray-800 w-full">Let's Snap! 🚀</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Tutorial Modal -->
-    <div id="tutorial-modal" class="hidden">
-      <div class="tutorial-content">
-        <h3>Welcome to Snapchat 2.O!</h3>
-        <div id="tutorial-step-1" class="tutorial-step">
-          <p>Tap the 📸 button to take a snap, 🎥 for a video, or 🔄 for a boomerang.</p>
-        </div>
-        <div id="tutorial-step-2" class="tutorial-step hidden">
-          <p>Double-tap the video feed to cycle filters, or scroll the filter carousel at the bottom to choose a filter.</p>
-        </div>
-        <div id="tutorial-step-3" class="tutorial-step hidden">
-          <p>Edit snaps with drawing, stickers, or text (movable!). Use 🗑️ to erase stickers.</p>
-        </div>
-        <div class="tutorial-buttons">
-          <button id="tutorial-prev" class="hidden">Previous</button>
-          <button id="tutorial-next">Next</button>
-          <button id="tutorial-skip">Skip</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="{{ url_for('static', filename='taskbar.js') }}"></script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>

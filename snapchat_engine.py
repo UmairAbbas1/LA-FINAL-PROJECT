@@ -13,22 +13,22 @@ logger = logging.getLogger(__name__)
 
 # ─── INITIAL SETUP ─────────────────────────────────────────────────────────────
 BASE_DIR = r"D:\LA-FINAL-PROJECT"
-PIC_DIR  = os.path.join(BASE_DIR, "static", "Pictures")
+PIC_DIR = os.path.join(BASE_DIR, "static", "Pictures")
 os.makedirs(PIC_DIR, exist_ok=True)
 
 pygame.init()
-beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
-click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
-cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
-chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
+beep = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
+click = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
+cowboy_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
+chath_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise RuntimeError("Unable to open webcam")
 
 mp_face_mesh = mp.solutions.face_mesh
-mp_hands     = mp.solutions.hands
-face_mesh    = mp_face_mesh.FaceMesh(
+mp_hands = mp.solutions.hands
+face_mesh = mp_face_mesh.FaceMesh(
     max_num_faces=1,
     refine_landmarks=True,
     min_detection_confidence=0.5,
@@ -49,21 +49,21 @@ def png(path):
 # sticker filters
 filters = {
     "cat": {
-        "left_ear" : png("left.png"),
+        "left_ear": png("left.png"),
         "right_ear": png("right.png"),
-        "nose"     : png("nose.png"),
+        "nose": png("nose.png"),
     },
     "dog": {
-        "left_ear" : png("Dogleft.png"),
+        "left_ear": png("Dogleft.png"),
         "right_ear": png("Dogright.png"),
-        "nose"     : png("Dognose.png"),
-        "tongue"   : png("tongue.png"),
+        "nose": png("Dognose.png"),
+        "tongue": png("tongue.png"),
     },
     "glasses": {
         "glass": png("Glasses.png"),
     },
     "cowboy": {
-        "hat"     : png("cowboy_hat.png"),
+        "hat": png("cowboy_hat.png"),
         "mustache": png("moustache.png"),
     },
     # chath below
@@ -77,7 +77,7 @@ if CH is not None:
     cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     x, y, w, h = cv2.boundingRect(cnts[0])
     filters["chath"] = {
-        "rgb":  CH[y:y+h, x:x+w, :3],
+        "rgb": CH[y:y+h, x:x+w, :3],
         "mask": mask_ch[y:y+h, x:x+w]
     }
 
@@ -96,9 +96,9 @@ if galaxy_img is None:
     galaxy_img = np.zeros((480,640,3), dtype=np.uint8)
 
 # build filter list
-filter_names    = list(filters.keys())
-current_filter  = filter_names[0]
-last_filter     = None
+filter_names = list(filters.keys())
+current_filter = filter_names[0]
+last_filter = None
 
 # ─── UTILITY FUNCTIONS ────────────────────────────────────────────────────────
 def overlay_image(roi, img, m):
@@ -356,7 +356,7 @@ def set_intensity(value):
     except ValueError:
         logger.error(f"Invalid intensity value: {value}")
 
-def save_snapshot(overlay_data=None):
+def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
@@ -396,7 +396,8 @@ def save_snapshot(overlay_data=None):
             frame = np.clip(frame, 0, 255).astype(np.uint8)
             ts = int(time.time() * 1000)
             fname = f"snap_{ts}.jpg"
-            path = os.path.join(PIC_DIR, fname)
+            os.makedirs(save_dir, exist_ok=True)
+            path = os.path.join(save_dir, fname)
             if not cv2.imwrite(path, frame):
                 logger.error(f"Attempt {attempt+1}: Failed to save snapshot to {path}")
                 continue
@@ -409,7 +410,7 @@ def save_snapshot(overlay_data=None):
     logger.error(f"Failed to save snapshot after {max_attempts} attempts")
     return None
 
-def record_video(duration=5):
+def record_video(duration=5, save_dir=PIC_DIR):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -419,7 +420,8 @@ def record_video(duration=5):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"video_{ts}.mp4"
-    path = os.path.join(PIC_DIR, fname)
+    os.makedirs(save_dir, exist_ok=True)
+    path = os.path.join(save_dir, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -440,10 +442,13 @@ def record_video(duration=5):
         out.write(frame)
     
     out.release()
+    if not os.path.exists(path):
+        logger.error(f"Failed to save video: File not created at {path}")
+        return None
     logger.debug(f"Saved video: {path}")
     return fname
 
-def record_boomerang(duration=3):
+def record_boomerang(duration=3, save_dir=PIC_DIR):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -453,7 +458,8 @@ def record_boomerang(duration=3):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"boomerang_{ts}.mp4"
-    path = os.path.join(PIC_DIR, fname)
+    os.makedirs(save_dir, exist_ok=True)
+    path = os.path.join(save_dir, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -480,13 +486,16 @@ def record_boomerang(duration=3):
         out.write(frame)
     
     out.release()
+    if not os.path.exists(path):
+        logger.error(f"Failed to save boomerang: File not created at {path}")
+        return None
     logger.debug(f"Saved boomerang: {path}")
     return fname
 
-def list_snapshots():
+def list_snapshots(save_dir=PIC_DIR):
     try:
-        files = [f for f in os.listdir(PIC_DIR) if f.endswith(('.jpg', '.mp4'))]
-        return sorted(files, key=lambda x: os.path.getctime(os.path.join(PIC_DIR, x)), reverse=True)
+        files = [f for f in os.listdir(save_dir) if f.endswith(('.jpg', '.mp4'))]
+        return sorted(files, key=lambda x: os.path.getctime(os.path.join(save_dir, x)), reverse=True)
     except Exception as e:
-        logger.error(f"Error listing snapshots: {e}")
+        logger.error(f"Error listing snapshots in {save_dir}: {e}")
         return []

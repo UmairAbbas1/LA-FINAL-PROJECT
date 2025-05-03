@@ -12,23 +12,23 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # ─── INITIAL SETUP ─────────────────────────────────────────────────────────────
-BASE_DIR = r"D:\LA-FINAL-PROJECT"
-PIC_DIR = os.path.join(BASE_DIR, "static", "Pictures")
+BASE_DIR = r"C:\second semester\Linear Algebra\LA-FINALPROJECT"
+PIC_DIR  = os.path.join(BASE_DIR, "static", "Pictures")
 os.makedirs(PIC_DIR, exist_ok=True)
 
 pygame.init()
-beep = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
-click = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
-cowboy_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
-chath_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
+beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
+click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
+cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
+chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise RuntimeError("Unable to open webcam")
 
 mp_face_mesh = mp.solutions.face_mesh
-mp_hands = mp.solutions.hands
-face_mesh = mp_face_mesh.FaceMesh(
+mp_hands     = mp.solutions.hands
+face_mesh    = mp_face_mesh.FaceMesh(
     max_num_faces=1,
     refine_landmarks=True,
     min_detection_confidence=0.5,
@@ -38,7 +38,26 @@ hands = mp_hands.Hands(max_num_hands=1)
 
 # Global intensity for adjustable filters (0-100)
 intensity = 100
+snowflakes = []
 
+
+
+# ... (rest of your imports and setup remain unchanged) ...
+
+# Corrected init_snowflakes function
+def init_snowflakes(num_flakes, iw, ih):
+    global snowflakes
+    snowflakes = []
+    for _ in range(num_flakes):
+        snowflakes.append({
+            'x': np.random.randint(0, iw),  # Random x position
+            'y': np.random.randint(-ih, ih),  # Start above or within frame
+            'vy': np.random.uniform(2, 5),  # Falling speed
+            'size': np.random.randint(2, 5)  # Radius of snowflake
+        })
+
+# Global intensity for adjustable filters (0-100)
+intensity = 100
 # ─── LOAD FILTER ASSETS ────────────────────────────────────────────────────────
 def png(path):
     img = cv2.imread(os.path.join(BASE_DIR, path), cv2.IMREAD_UNCHANGED)
@@ -46,24 +65,31 @@ def png(path):
         logger.error(f"Failed to load image: {path}")
     return img
 
+leaf_images =[
+    png("Leave 1.png"),
+    png("leave 2.png"),
+    png("leave 3.png"),
+    
+    # Add more leaf images as needed
+]
 # sticker filters
 filters = {
     "cat": {
-        "left_ear": png("left.png"),
+        "left_ear" : png("left.png"),
         "right_ear": png("right.png"),
-        "nose": png("nose.png"),
+        "nose"     : png("nose.png"),
     },
     "dog": {
-        "left_ear": png("Dogleft.png"),
+        "left_ear" : png("Dogleft.png"),
         "right_ear": png("Dogright.png"),
-        "nose": png("Dognose.png"),
-        "tongue": png("tongue.png"),
+        "nose"     : png("Dognose.png"),
+        "tongue"   : png("tongue.png"),
     },
     "glasses": {
         "glass": png("Glasses.png"),
     },
     "cowboy": {
-        "hat": png("cowboy_hat.png"),
+        "hat"     : png("cowboy_hat.png"),
         "mustache": png("moustache.png"),
     },
     # chath below
@@ -71,19 +97,18 @@ filters = {
 
 # load CHATH sticker
 CH = png("CHATH.png")
-if CH is not None:
-    alpha = CH[:, :, 3]
-    mask_ch = (alpha > 200).astype(np.uint8) * 255
-    cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    x, y, w, h = cv2.boundingRect(cnts[0])
-    filters["chath"] = {
-        "rgb": CH[y:y+h, x:x+w, :3],
-        "mask": mask_ch[y:y+h, x:x+w]
-    }
+alpha = CH[:, :, 3]
+mask_ch = (alpha > 200).astype(np.uint8) * 255
+cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+x, y, w, h = cv2.boundingRect(cnts[0])
+filters["chath"] = {
+    "rgb":  CH[y:y+h, x:x+w, :3],
+    "mask": mask_ch[y:y+h, x:x+w]
+}
 
 # effect filters (no images needed)
 effect_names = [
-    "vintage", "mirror", "pixelate", "old_film", "thermal",
+    "vintage", "mirror","autumn","snow" ,"pixelate", "old_film", "thermal",
     "galaxy", "brighten", "Black & white", "cartoon",
     "beauty", "sketch", "negative", "sepia", "glitch", "neon_glow", "Original"
 ]
@@ -96,9 +121,9 @@ if galaxy_img is None:
     galaxy_img = np.zeros((480,640,3), dtype=np.uint8)
 
 # build filter list
-filter_names = list(filters.keys())
-current_filter = filter_names[0]
-last_filter = None
+filter_names    = list(filters.keys())
+current_filter  = filter_names[0]
+last_filter     = None
 
 # ─── UTILITY FUNCTIONS ────────────────────────────────────────────────────────
 def overlay_image(roi, img, m):
@@ -127,6 +152,47 @@ def get_face_box(landmarks, w, h):
     x0 = max(0, x-pad_w)
     y0 = max(0, y-pad_h)
     return x0, y0, min(w, x+bw+pad_w)-x0, min(h, y+bh)-y0
+
+leaves = []
+
+def init_leaves(num_leaves, width, height):
+    """
+    Initialize leaves with:
+      - Random spawn edge (top, left, or right)
+      - Smaller scale (0.2–0.4)
+      - Faster velocities
+      - Random rotation and spin
+    """
+    global leaves
+    leaves = []
+    for _ in range(num_leaves):
+        side = random.choice(['top', 'left', 'right'])
+
+        if side == 'top':
+            x  = random.uniform(0, width)
+            y  = random.uniform(-height * 0.2, 0)
+            vx = random.uniform(-0.5, 0.5)
+            vy = random.uniform(5, 10)
+        elif side == 'left':
+            x  = random.uniform(-width * 0.2, 0)
+            y  = random.uniform(0, height)
+            vx = random.uniform(0, 1)
+            vy = random.uniform(5, 10)
+        else:  # right
+            x  = random.uniform(width, width * 1.2)
+            y  = random.uniform(0, height)
+            vx = random.uniform(-1, 0)
+            vy = random.uniform(5, 10)
+
+        leaves.append({
+            'img': random.choice(leaf_images),
+            'x': x, 'y': y,
+            'vx': vx, 'vy': vy,
+            'angle': random.uniform(0, 360),
+            'angular_velocity': random.uniform(-5, 5),
+            'scale': random.uniform(0.1, 0.2)
+            })
+
 
 # ─── CORE FILTER LOGIC ────────────────────────────────────────────────────────
 def apply_filter_logic(frame, iw, ih, landmarks):
@@ -260,6 +326,94 @@ def apply_filter_logic(frame, iw, ih, landmarks):
             roi = frame[y0:y0+h_clip, x0:x0+w_clip]
             np.copyto(roi, donor, where=msk[...,None].astype(bool))
 
+        elif current_filter == "snow":
+            # Initialize snowflakes if empty
+            if not snowflakes:
+                init_snowflakes(100, iw, ih)
+            
+            # Create a transparent snow layer
+            snow_layer = np.zeros_like(frame)
+            
+            # Update and draw snowflakes
+            for flake in snowflakes:
+                # Update position
+                flake['y'] += flake['vy'] * intensity_factor  # Scale speed with intensity
+                if flake['y'] > ih:  # Reset if off-screen
+                    flake['x'] = np.random.randint(0, iw)
+                    flake['y'] = np.random.randint(-ih, 0)
+                
+                # Draw snowflake as a white circle
+                center = (int(flake['x']), int(flake['y']))
+                radius = int(flake['size'])
+                if 0 <= center[0] < iw and 0 <= center[1] < ih:
+                    cv2.circle(snow_layer, center, radius, (255, 255, 255), -1)
+            
+            # Blend snow layer with original frame
+            alpha = 0.5  # Adjusted for visibility
+            frame[:] = cv2.addWeighted(snow_layer, alpha, frame, 1 - alpha, 0)
+                
+        elif current_filter == "autumn":
+            if not leaves:
+                init_leaves(30, iw, ih)  # Reduced number of leaves
+
+            overlay = frame.copy()
+            for leaf in leaves:
+                # Update position & rotation
+                leaf['x']     += leaf['vx'] * intensity_factor
+                leaf['y']     += leaf['vy'] * intensity_factor
+                leaf['angle'] += leaf['angular_velocity']
+
+                # Respawn if off-screen
+                if (leaf['y'] > ih + 50 or leaf['x'] < -50 or leaf['x'] > iw + 50):
+                    # Reinitialize just this leaf
+                    side = random.choice(['top', 'left', 'right'])
+                    if side == 'top':
+                        leaf['x'], leaf['y'] = random.uniform(0, iw), random.uniform(-ih*0.2, 0)
+                        leaf['vx'], leaf['vy'] = random.uniform(-0.5, 0.5), random.uniform(5, 10)
+                    elif side == 'left':
+                        leaf['x'], leaf['y'] = random.uniform(-iw*0.2, 0), random.uniform(0, ih)
+                        leaf['vx'], leaf['vy'] = random.uniform(0, 1), random.uniform(5, 10)
+                    else:
+                        leaf['x'], leaf['y'] = random.uniform(iw, iw*1.2), random.uniform(0, ih)
+                        leaf['vx'], leaf['vy'] = random.uniform(-1, 0), random.uniform(5, 10)
+                    leaf['angle']            = random.uniform(0, 360)
+                    leaf['angular_velocity'] = random.uniform(-5, 5)
+                    leaf['scale']            = random.uniform(0.1, 0.2)
+
+                # Draw & blend
+                img = leaf['img']
+                if img is None:
+                    continue
+                h0, w0 = img.shape[:2]
+                sw, sh = int(w0 * leaf['scale']), int(h0 * leaf['scale'])
+                resized = cv2.resize(img, (sw, sh), interpolation=cv2.INTER_AREA)
+
+                # Rotate around its center
+                M = cv2.getRotationMatrix2D((sw/2, sh/2), leaf['angle'], 1)
+                rotated = cv2.warpAffine(
+                    resized, M, (sw, sh),
+                    flags=cv2.INTER_LINEAR,
+                    borderMode=cv2.BORDER_CONSTANT,
+                    borderValue=(0,0,0,0)
+                )
+
+                x, y = int(leaf['x']), int(leaf['y'])
+                y1, y2 = max(0, y), min(ih, y + sh)
+                x1, x2 = max(0, x), min(iw, x + sw)
+                ly1, ly2 = max(0, -y), min(sh, ih - y)
+                lx1, lx2 = max(0, -x), min(sw, iw - x)
+
+                if y1 < y2 and x1 < x2:
+                    alpha = rotated[ly1:ly2, lx1:lx2, 3:] / 255.0
+                    fg    = rotated[ly1:ly2, lx1:lx2, :3]
+                    bg    = overlay[y1:y2, x1:x2]
+
+                    # Alpha composite
+                    overlay[y1:y2, x1:x2] = (alpha * fg + (1 - alpha) * bg).astype(np.uint8)
+
+            frame[:] = overlay
+
+
         elif current_filter == "cowboy":
             hat = fdata.get("hat")
             ms = fdata.get("mustache")
@@ -356,7 +510,7 @@ def set_intensity(value):
     except ValueError:
         logger.error(f"Invalid intensity value: {value}")
 
-def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
+def save_snapshot(overlay_data=None):
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
@@ -396,8 +550,7 @@ def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
             frame = np.clip(frame, 0, 255).astype(np.uint8)
             ts = int(time.time() * 1000)
             fname = f"snap_{ts}.jpg"
-            os.makedirs(save_dir, exist_ok=True)
-            path = os.path.join(save_dir, fname)
+            path = os.path.join(PIC_DIR, fname)
             if not cv2.imwrite(path, frame):
                 logger.error(f"Attempt {attempt+1}: Failed to save snapshot to {path}")
                 continue
@@ -410,7 +563,7 @@ def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
     logger.error(f"Failed to save snapshot after {max_attempts} attempts")
     return None
 
-def record_video(duration=5, save_dir=PIC_DIR):
+def record_video(duration=5):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -420,8 +573,7 @@ def record_video(duration=5, save_dir=PIC_DIR):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"video_{ts}.mp4"
-    os.makedirs(save_dir, exist_ok=True)
-    path = os.path.join(save_dir, fname)
+    path = os.path.join(PIC_DIR, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -442,13 +594,10 @@ def record_video(duration=5, save_dir=PIC_DIR):
         out.write(frame)
     
     out.release()
-    if not os.path.exists(path):
-        logger.error(f"Failed to save video: File not created at {path}")
-        return None
     logger.debug(f"Saved video: {path}")
     return fname
 
-def record_boomerang(duration=3, save_dir=PIC_DIR):
+def record_boomerang(duration=3):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -458,8 +607,7 @@ def record_boomerang(duration=3, save_dir=PIC_DIR):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"boomerang_{ts}.mp4"
-    os.makedirs(save_dir, exist_ok=True)
-    path = os.path.join(save_dir, fname)
+    path = os.path.join(PIC_DIR, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -486,16 +634,13 @@ def record_boomerang(duration=3, save_dir=PIC_DIR):
         out.write(frame)
     
     out.release()
-    if not os.path.exists(path):
-        logger.error(f"Failed to save boomerang: File not created at {path}")
-        return None
     logger.debug(f"Saved boomerang: {path}")
     return fname
 
-def list_snapshots(save_dir=PIC_DIR):
+def list_snapshots():
     try:
-        files = [f for f in os.listdir(save_dir) if f.endswith(('.jpg', '.mp4'))]
-        return sorted(files, key=lambda x: os.path.getctime(os.path.join(save_dir, x)), reverse=True)
+        files = [f for f in os.listdir(PIC_DIR) if f.endswith(('.jpg', '.mp4'))]
+        return sorted(files, key=lambda x: os.path.getctime(os.path.join(PIC_DIR, x)), reverse=True)
     except Exception as e:
-        logger.error(f"Error listing snapshots in {save_dir}: {e}")
+        logger.error(f"Error listing snapshots: {e}")
         return []

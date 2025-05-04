@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # ─── INITIAL SETUP ─────────────────────────────────────────────────────────────
-BASE_DIR = r"C:\second semester\Linear Algebra\LA-FINALPROJECT"
+BASE_DIR = r"D:\LA-FINAL-PROJECT"
 PIC_DIR  = os.path.join(BASE_DIR, "static", "Pictures")
 os.makedirs(PIC_DIR, exist_ok=True)
 
@@ -223,10 +223,10 @@ def apply_filter_logic(frame, iw, ih, landmarks):
 
         elif current_filter == "glasses" and "glass" in fdata and fdata["glass"] is not None:
             g = fdata["glass"]
-            gw, gh = int((rex-lex)*2), int((rex-lex)*0.4)
+            gw, gh = int((rex-lex)*2), int((rex-lex)*0.4)+80
             r = cv2.resize(g, (gw,gh), interpolation=cv2.INTER_CUBIC)
             rgb, mask = r[:,:,:3], r[:,:,3]
-            gx, gy = lex-int(gw*0.25), ley-gh//2
+            gx, gy = lex-int(gw*0.25), ley-gh//2+10
             if 0<=gx<iw-gw and 0<=gy<ih-gh:
                 roi = frame[gy:gy+gh, gx:gx+gw]
                 frame[gy:gy+gh, gx:gx+gw] = overlay_image(roi, rgb, mask)
@@ -510,7 +510,7 @@ def set_intensity(value):
     except ValueError:
         logger.error(f"Invalid intensity value: {value}")
 
-def save_snapshot(overlay_data=None):
+def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
@@ -550,7 +550,8 @@ def save_snapshot(overlay_data=None):
             frame = np.clip(frame, 0, 255).astype(np.uint8)
             ts = int(time.time() * 1000)
             fname = f"snap_{ts}.jpg"
-            path = os.path.join(PIC_DIR, fname)
+            os.makedirs(save_dir, exist_ok=True)
+            path = os.path.join(save_dir, fname)
             if not cv2.imwrite(path, frame):
                 logger.error(f"Attempt {attempt+1}: Failed to save snapshot to {path}")
                 continue
@@ -563,7 +564,7 @@ def save_snapshot(overlay_data=None):
     logger.error(f"Failed to save snapshot after {max_attempts} attempts")
     return None
 
-def record_video(duration=5):
+def record_video(duration=5, save_dir=PIC_DIR):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -573,7 +574,8 @@ def record_video(duration=5):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"video_{ts}.mp4"
-    path = os.path.join(PIC_DIR, fname)
+    os.makedirs(save_dir, exist_ok=True)
+    path = os.path.join(save_dir, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -594,10 +596,13 @@ def record_video(duration=5):
         out.write(frame)
     
     out.release()
+    if not os.path.exists(path):
+        logger.error(f"Failed to save video: File not created at {path}")
+        return None
     logger.debug(f"Saved video: {path}")
     return fname
 
-def record_boomerang(duration=3):
+def record_boomerang(duration=3, save_dir=PIC_DIR):
     fps = 30
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -607,7 +612,8 @@ def record_boomerang(duration=3):
     ih, iw = frame.shape[:2]
     ts = int(time.time() * 1000)
     fname = f"boomerang_{ts}.mp4"
-    path = os.path.join(PIC_DIR, fname)
+    os.makedirs(save_dir, exist_ok=True)
+    path = os.path.join(save_dir, fname)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, fps, (iw, ih))
     
@@ -634,13 +640,16 @@ def record_boomerang(duration=3):
         out.write(frame)
     
     out.release()
+    if not os.path.exists(path):
+        logger.error(f"Failed to save boomerang: File not created at {path}")
+        return None
     logger.debug(f"Saved boomerang: {path}")
     return fname
 
-def list_snapshots():
+def list_snapshots(save_dir=PIC_DIR):
     try:
-        files = [f for f in os.listdir(PIC_DIR) if f.endswith(('.jpg', '.mp4'))]
-        return sorted(files, key=lambda x: os.path.getctime(os.path.join(PIC_DIR, x)), reverse=True)
+        files = [f for f in os.listdir(save_dir) if f.endswith(('.jpg', '.mp4'))]
+        return sorted(files, key=lambda x: os.path.getctime(os.path.join(save_dir, x)), reverse=True)
     except Exception as e:
-        logger.error(f"Error listing snapshots: {e}")
+        logger.error(f"Error listing snapshots in {save_dir}: {e}")
         return []

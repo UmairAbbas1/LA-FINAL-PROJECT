@@ -14,7 +14,7 @@ app = Flask(__name__)
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
+ 
 def get_user_dir(username):
     """Get user-specific directory for snaps, fallback to PIC_DIR if invalid."""
     if not username or not re.match(r'^[a-zA-Z0-9_-]+$', username):

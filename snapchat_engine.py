@@ -11,24 +11,10 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# ─── INITIAL SETUP ─────────────────────────────────────────────────────────────
-BASE_DIR = r"D:\LA-FINAL-PROJECT"
-PIC_DIR  = os.path.join(BASE_DIR, "static", "Pictures")
-os.makedirs(PIC_DIR, exist_ok=True)
-
-pygame.init()
-beep          = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
-click         = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
-cowboy_music  = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
-chath_music   = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
-
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    raise RuntimeError("Unable to open webcam")
-
+# Initialize MediaPipe Face Mesh and Hands
 mp_face_mesh = mp.solutions.face_mesh
-mp_hands     = mp.solutions.hands
-face_mesh    = mp_face_mesh.FaceMesh(
+mp_hands = mp.solutions.hands
+face_mesh = mp_face_mesh.FaceMesh(
     max_num_faces=1,
     refine_landmarks=True,
     min_detection_confidence=0.5,
@@ -36,96 +22,199 @@ face_mesh    = mp_face_mesh.FaceMesh(
 )
 hands = mp_hands.Hands(max_num_hands=1)
 
-# Global intensity for adjustable filters (0-100)
-intensity = 100
-snowflakes = []
+# Global variables
+BASE_DIR = r"D:\LA-FINAL-PROJECT"
+PIC_DIR = os.path.join(BASE_DIR, "static", "Pictures")
+os.makedirs(PIC_DIR, exist_ok=True)
 
+pygame.init()
+beep = pygame.mixer.Sound(os.path.join(BASE_DIR, "Beep.wav"))
+click = pygame.mixer.Sound(os.path.join(BASE_DIR, "iphone-camera-capture-6448.wav"))
+cowboy_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "cowboy_music.wav"))
+chath_music = pygame.mixer.Sound(os.path.join(BASE_DIR, "BADO BADI.wav"))
 
+# Try multiple camera indices to ensure webcam access
+for i in range(3):
+    cap = cv2.VideoCapture(i)
+    if cap.isOpened():
+        logger.debug(f"Webcam opened successfully on index {i}")
+        break
+else:
+    logger.error("Unable to open any webcam")
+    cap = None
 
-# ... (rest of your imports and setup remain unchanged) ...
-
-# Corrected init_snowflakes function
-def init_snowflakes(num_flakes, iw, ih):
-    global snowflakes
-    snowflakes = []
-    for _ in range(num_flakes):
-        snowflakes.append({
-            'x': np.random.randint(0, iw),  # Random x position
-            'y': np.random.randint(-ih, ih),  # Start above or within frame
-            'vy': np.random.uniform(2, 5),  # Falling speed
-            'size': np.random.randint(2, 5)  # Radius of snowflake
-        })
-
-# Global intensity for adjustable filters (0-100)
-intensity = 100
-# ─── LOAD FILTER ASSETS ────────────────────────────────────────────────────────
+# Load filter assets
 def png(path):
-    img = cv2.imread(os.path.join(BASE_DIR, path), cv2.IMREAD_UNCHANGED)
+    full_path = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full_path):
+        logger.error(f"Image file not found: {full_path}")
+        return None
+    img = cv2.imread(full_path, cv2.IMREAD_UNCHANGED)
     if img is None:
-        logger.error(f"Failed to load image: {path}")
+        logger.error(f"Failed to load image: {full_path}")
+        return None
+    if img.shape[2] != 4:
+        logger.error(f"Image does not have an alpha channel: {full_path}")
+        return None
     return img
 
-leaf_images =[
+leaf_images = [
     png("Leave 1.png"),
     png("leave 2.png"),
     png("leave 3.png"),
-    
-    # Add more leaf images as needed
 ]
-# sticker filters
+
 filters = {
     "cat": {
-        "left_ear" : png("left.png"),
+        "left_ear": png("left.png"),
         "right_ear": png("right.png"),
-        "nose"     : png("nose.png"),
+        "nose": png("nose.png"),
     },
     "dog": {
-        "left_ear" : png("Dogleft.png"),
+        "left_ear": png("Dogleft.png"),
         "right_ear": png("Dogright.png"),
-        "nose"     : png("Dognose.png"),
-        "tongue"   : png("tongue.png"),
+        "nose": png("Dognose.png"),
+        "tongue": png("tongue.png"),
     },
     "glasses": {
         "glass": png("Glasses.png"),
     },
     "cowboy": {
-        "hat"     : png("cowboy_hat.png"),
+        "hat": png("cowboy_hat.png"),
         "mustache": png("moustache.png"),
     },
-    # chath below
 }
 
-# load CHATH sticker
+# Load CHATH sticker
 CH = png("CHATH.png")
-alpha = CH[:, :, 3]
-mask_ch = (alpha > 200).astype(np.uint8) * 255
-cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-x, y, w, h = cv2.boundingRect(cnts[0])
-filters["chath"] = {
-    "rgb":  CH[y:y+h, x:x+w, :3],
-    "mask": mask_ch[y:y+h, x:x+w]
-}
+if CH is not None:
+    alpha = CH[:, :, 3]
+    mask_ch = (alpha > 200).astype(np.uint8) * 255
+    cnts, _ = cv2.findContours(mask_ch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if cnts:
+        x, y, w, h = cv2.boundingRect(cnts[0])
+        filters["chath"] = {
+            "rgb": CH[y:y+h, x:x+w, :3],
+            "mask": mask_ch[y:y+h, x:x+w]
+        }
+        logger.debug(f"CHATH loaded: w={w}, h={h}")
+    else:
+        logger.error("No contours found in CHATH.png mask")
+        filters["chath"] = {}
+else:
+    filters["chath"] = {}
 
-# effect filters (no images needed)
+# Load FASIAL sticker
+FASIAL_PATH = os.path.join(BASE_DIR, "testingf2.png")
+fasial_img = cv2.imread(FASIAL_PATH, cv2.IMREAD_UNCHANGED)
+if fasial_img is None:
+    logger.error(f"Error: testingf2.png not found or could not be loaded.")
+else:
+    alpha_fasial = fasial_img[:, :, 3]
+    mask_fasial = (alpha_fasial > 200).astype(np.uint8) * 255
+    cnts, _ = cv2.findContours(mask_fasial, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if cnts:
+        x, y, w, h = cv2.boundingRect(cnts[0])
+        filters["fasial"] = {
+            "rgb": fasial_img[y:y+h, x:x+w, :3],
+            "mask": mask_fasial[y:y+h, x:x+w],
+            "gradient": None,
+            "silver_gradient": None,
+            "stars": None
+        }
+        logger.debug(f"Testingf2 loaded: w={w}, h={h}")
+    else:
+        logger.error("No contours found in testingf2.png mask")
+        filters["fasial"] = {}
+
+# Effect filters
 effect_names = [
-    "vintage", "mirror","autumn","snow" ,"pixelate", "old_film", "thermal",
-    "galaxy", "brighten", "Black & white", "cartoon",
-    "beauty", "sketch", "negative", "sepia", "glitch", "neon_glow", "Original"
+    "vintage", "mirror", "autumn", "snow", "pixelate", "old_film", "thermal",
+    "galaxy", "brighten", "Black & white", "cartoon", "beauty", "sketch",
+    "negative", "sepia", "glitch", "neon_glow", "Original", "fasial"
 ]
 for name in effect_names:
-    filters[name] = {}
+    if name not in filters:
+        filters[name] = {}
 
-# galaxy background for galaxy filter
 galaxy_img = png("galaxy.png")
 if galaxy_img is None:
-    galaxy_img = np.zeros((480,640,3), dtype=np.uint8)
+    galaxy_img = np.zeros((480, 640, 3), dtype=np.uint8)
 
-# build filter list
-filter_names    = list(filters.keys())
-current_filter  = filter_names[0]
-last_filter     = None
+filter_names = list(filters.keys())
+current_filter = filter_names[0]
+last_filter = None
+intensity = 100
+snowflakes = []
+leaves = []
 
-# ─── UTILITY FUNCTIONS ────────────────────────────────────────────────────────
+def init_snowflakes(num_flakes, iw, ih):
+    global snowflakes
+    snowflakes = []
+    for _ in range(num_flakes):
+        snowflakes.append({
+            'x': np.random.randint(0, iw),
+            'y': np.random.randint(-ih, ih),
+            'vy': np.random.uniform(2, 5),
+            'size': np.random.randint(2, 5)
+        })
+
+def init_leaves(num_leaves, width, height):
+    global leaves
+    leaves = []
+    for _ in range(num_leaves):
+        side = random.choice(['top', 'left', 'right'])
+        if side == 'top':
+            x = random.uniform(0, width)
+            y = random.uniform(-height * 0.2, 0)
+            vx = random.uniform(-0.5, 0.5)
+            vy = random.uniform(5, 10)
+        elif side == 'left':
+            x = random.uniform(-width * 0.2, 0)
+            y = random.uniform(0, height)
+            vx = random.uniform(0, 1)
+            vy = random.uniform(5, 10)
+        else:
+            x = random.uniform(width, width * 1.2)
+            y = random.uniform(0, height)
+            vx = random.uniform(-1, 0)
+            vy = random.uniform(5, 10)
+        leaves.append({
+            'img': random.choice(leaf_images),
+            'x': x, 'y': y,
+            'vx': vx, 'vy': vy,
+            'angle': random.uniform(0, 360),
+            'angular_velocity': random.uniform(-5, 5),
+            'scale': random.uniform(0.1, 0.2)
+        })
+
+# Precompute dark theme background for fasial filter
+def create_dark_theme_background(iw, ih):
+    gradient = np.zeros((ih, iw, 3), dtype=np.uint8)
+    for i in range(ih):
+        t = i / ih
+        color = (int(30 * (1 - t) + 10 * t), int(30 * (1 - t) + 10 * t), int(40 * (1 - t) + 20 * t))
+        gradient[i, :] = color
+    silver_gradient = np.zeros((ih, iw, 3), dtype=np.uint8)
+    for i in range(ih):
+        t = i / ih
+        silver = int(50 * (1 - t))
+        silver_gradient[i, :] = (silver, silver, silver)
+    stars = np.zeros((ih, iw, 3), dtype=np.uint8)
+    num_stars = 50
+    for _ in range(num_stars):
+        x = np.random.randint(0, iw)
+        y = np.random.randint(0, ih)
+        brightness = np.random.randint(100, 255)
+        cv2.circle(stars, (x, y), 1, (brightness, brightness, brightness), -1)
+    return gradient, silver_gradient, stars
+
+def apply_dark_theme_background(frame, gradient, silver_gradient, stars):
+    frame[:] = cv2.addWeighted(frame, 0.6, gradient, 0.4, 0)
+    frame[:] = cv2.addWeighted(frame, 0.8, silver_gradient, 0.2, 0)
+    frame[:] = cv2.addWeighted(frame, 0.9, stars, 0.1, 0)
+    return frame
+
 def overlay_image(roi, img, m):
     try:
         img = img.astype(np.uint8)
@@ -141,62 +230,24 @@ def overlay_image(roi, img, m):
         logger.error(f"Overlay image error: {e}")
         return roi
 
-def get_face_box(landmarks, w, h):
+def get_face_box(landmarks, w, h, vertical_offset=60):  # Increased vertical_offset to 60
     if not landmarks:
+        logger.warning("No face landmarks detected")
         return 0, 0, w, h
     pts = np.array([[p.x*w, p.y*h] for p in landmarks.landmark])
     hull_idx = [10, 152, 234, 454]
     hull = pts[hull_idx]
     x, y, bw, bh = cv2.boundingRect(hull.astype(np.float32))
-    pad_w, pad_h = int(bw*0.3), int(bh*0.4)
+    pad_w, pad_h = int(bw*0.3), int(bh*0.6)  # Increased pad_h to 0.6 to extend downward
     x0 = max(0, x-pad_w)
-    y0 = max(0, y-pad_h)
-    return x0, y0, min(w, x+bw+pad_w)-x0, min(h, y+bh)-y0
+    y0 = max(0, y-pad_h-vertical_offset)
+    return x0, y0, min(w, x+bw+pad_w)-x0, min(h, y+bh+pad_h)-y0  # Adjusted min(h, y+bh+pad_h) to extend further
 
-leaves = []
-
-def init_leaves(num_leaves, width, height):
-    """
-    Initialize leaves with:
-      - Random spawn edge (top, left, or right)
-      - Smaller scale (0.2–0.4)
-      - Faster velocities
-      - Random rotation and spin
-    """
-    global leaves
-    leaves = []
-    for _ in range(num_leaves):
-        side = random.choice(['top', 'left', 'right'])
-
-        if side == 'top':
-            x  = random.uniform(0, width)
-            y  = random.uniform(-height * 0.2, 0)
-            vx = random.uniform(-0.5, 0.5)
-            vy = random.uniform(5, 10)
-        elif side == 'left':
-            x  = random.uniform(-width * 0.2, 0)
-            y  = random.uniform(0, height)
-            vx = random.uniform(0, 1)
-            vy = random.uniform(5, 10)
-        else:  # right
-            x  = random.uniform(width, width * 1.2)
-            y  = random.uniform(0, height)
-            vx = random.uniform(-1, 0)
-            vy = random.uniform(5, 10)
-
-        leaves.append({
-            'img': random.choice(leaf_images),
-            'x': x, 'y': y,
-            'vx': vx, 'vy': vy,
-            'angle': random.uniform(0, 360),
-            'angular_velocity': random.uniform(-5, 5),
-            'scale': random.uniform(0.1, 0.2)
-            })
-
-
-# ─── CORE FILTER LOGIC ────────────────────────────────────────────────────────
 def apply_filter_logic(frame, iw, ih, landmarks):
-    global current_filter, intensity
+    global current_filter, intensity, leaves
+    intensity_factor = intensity / 100.0
+    fdata = filters[current_filter]
+
     if landmarks:
         le, re = landmarks.landmark[33], landmarks.landmark[263]
         nt, fh = landmarks.landmark[1], landmarks.landmark[10]
@@ -211,9 +262,6 @@ def apply_filter_logic(frame, iw, ih, landmarks):
     else:
         lex, ley, rex, rey, nx, ny, fx, fy, tly, bly = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ew, eh = iw // 4, ih // 4
-
-    fdata = filters[current_filter]
-    intensity_factor = intensity / 100.0
 
     try:
         if current_filter == "vintage":
@@ -310,62 +358,68 @@ def apply_filter_logic(frame, iw, ih, landmarks):
             sk = cv2.divide(gray, cv2.bitwise_not(blur), scale=256.0)
             frame[:] = cv2.cvtColor(sk, cv2.COLOR_GRAY2BGR)
 
-        elif current_filter == "chath" and "rgb" in fdata:
-            hsv = cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
-            hue = int(time.time()*60)%180
-            rain = np.full_like(hsv,(hue,255,255))
-            rr = cv2.cvtColor(rain,cv2.COLOR_HSV2BGR)
-            frame[:] = cv2.addWeighted(frame,0.5,rr,0.5,0)
-            x0,y0,bw,bh = get_face_box(landmarks, iw, ih)
-            donor = cv2.resize(fdata["rgb"],(bw,bh),interpolation=cv2.INTER_AREA)
-            msk = cv2.resize(fdata["mask"],(bw,bh),interpolation=cv2.INTER_NEAREST)
-            h_clip = min(bh, ih-y0)
-            w_clip = min(bw, iw-x0)
-            donor = donor[:h_clip,:w_clip]
-            msk = msk[:h_clip,:w_clip]
-            roi = frame[y0:y0+h_clip, x0:x0+w_clip]
-            np.copyto(roi, donor, where=msk[...,None].astype(bool))
+        elif current_filter in ["chath", "fasial"] and "rgb" in fdata and "mask" in fdata:
+            logger.debug(f"Applying filter: {current_filter}")
+            if current_filter == "chath":
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                hue = int(time.time() * 60) % 180
+                rain = np.full_like(hsv, (hue, 255, 255))
+                rr = cv2.cvtColor(rain, cv2.COLOR_HSV2BGR)
+                frame[:] = cv2.addWeighted(frame, 0.5, rr, 0.5, 0)
+
+            x0, y0, bw, bh = get_face_box(landmarks, iw, ih)
+            logger.debug(f"Face box: x0={x0}, y0={y0}, bw={bw}, bh={bh}")
+            if x0 >= 0 and y0 >= 0 and bw > 0 and bh > 0:
+                try:
+                    current_size = (bw, bh)
+                    if "last_size" not in fdata or fdata["last_size"] != current_size or fdata.get("cached_donor") is None or fdata.get("cached_mask") is None:
+                        fdata["cached_donor"] = cv2.resize(fdata["rgb"], (bw, bh), interpolation=cv2.INTER_AREA)
+                        fdata["cached_mask"] = cv2.resize(fdata["mask"], (bw, bh), interpolation=cv2.INTER_NEAREST)
+                        fdata["last_size"] = current_size
+                    
+                    h_clip = min(bh, ih - y0)
+                    w_clip = min(bw, iw - x0)
+                    logger.debug(f"Clip dimensions: h_clip={h_clip}, w_clip={w_clip}")
+                    if h_clip > 0 and w_clip > 0 and fdata["cached_donor"].shape[0] >= h_clip and fdata["cached_donor"].shape[1] >= w_clip and fdata["cached_mask"].shape[0] >= h_clip and fdata["cached_mask"].shape[1] >= w_clip:
+                        donor = fdata["cached_donor"][:h_clip, :w_clip]
+                        msk = fdata["cached_mask"][:h_clip, :w_clip]
+                        roi = frame[y0:y0+h_clip, x0:x0+w_clip]
+                        frame[y0:y0+h_clip, x0:x0+w_clip] = overlay_image(roi, donor, msk)
+                        logger.debug(f"{current_filter.capitalize()} applied at x0={x0}, y0={y0}, bw={bw}, bh={bh}")
+                    else:
+                        logger.error(f"Invalid clip dimensions for {current_filter}: h_clip={h_clip}, w_clip={w_clip}")
+                except Exception as e:
+                    logger.error(f"Error applying {current_filter} overlay: {e}")
+
+            if current_filter == "fasial" and fdata["gradient"] is None:
+                fdata["gradient"], fdata["silver_gradient"], fdata["stars"] = create_dark_theme_background(iw, ih)
+                frame = apply_dark_theme_background(frame, fdata["gradient"], fdata["silver_gradient"], fdata["stars"])
 
         elif current_filter == "snow":
-            # Initialize snowflakes if empty
             if not snowflakes:
                 init_snowflakes(100, iw, ih)
-            
-            # Create a transparent snow layer
             snow_layer = np.zeros_like(frame)
-            
-            # Update and draw snowflakes
             for flake in snowflakes:
-                # Update position
-                flake['y'] += flake['vy'] * intensity_factor  # Scale speed with intensity
-                if flake['y'] > ih:  # Reset if off-screen
+                flake['y'] += flake['vy'] * intensity_factor
+                if flake['y'] > ih:
                     flake['x'] = np.random.randint(0, iw)
                     flake['y'] = np.random.randint(-ih, 0)
-                
-                # Draw snowflake as a white circle
                 center = (int(flake['x']), int(flake['y']))
                 radius = int(flake['size'])
                 if 0 <= center[0] < iw and 0 <= center[1] < ih:
                     cv2.circle(snow_layer, center, radius, (255, 255, 255), -1)
-            
-            # Blend snow layer with original frame
-            alpha = 0.5  # Adjusted for visibility
+            alpha = 0.5
             frame[:] = cv2.addWeighted(snow_layer, alpha, frame, 1 - alpha, 0)
-                
+
         elif current_filter == "autumn":
             if not leaves:
-                init_leaves(30, iw, ih)  # Reduced number of leaves
-
+                init_leaves(30, iw, ih)
             overlay = frame.copy()
             for leaf in leaves:
-                # Update position & rotation
-                leaf['x']     += leaf['vx'] * intensity_factor
-                leaf['y']     += leaf['vy'] * intensity_factor
+                leaf['x'] += leaf['vx'] * intensity_factor
+                leaf['y'] += leaf['vy'] * intensity_factor
                 leaf['angle'] += leaf['angular_velocity']
-
-                # Respawn if off-screen
                 if (leaf['y'] > ih + 50 or leaf['x'] < -50 or leaf['x'] > iw + 50):
-                    # Reinitialize just this leaf
                     side = random.choice(['top', 'left', 'right'])
                     if side == 'top':
                         leaf['x'], leaf['y'] = random.uniform(0, iw), random.uniform(-ih*0.2, 0)
@@ -376,19 +430,15 @@ def apply_filter_logic(frame, iw, ih, landmarks):
                     else:
                         leaf['x'], leaf['y'] = random.uniform(iw, iw*1.2), random.uniform(0, ih)
                         leaf['vx'], leaf['vy'] = random.uniform(-1, 0), random.uniform(5, 10)
-                    leaf['angle']            = random.uniform(0, 360)
+                    leaf['angle'] = random.uniform(0, 360)
                     leaf['angular_velocity'] = random.uniform(-5, 5)
-                    leaf['scale']            = random.uniform(0.1, 0.2)
-
-                # Draw & blend
+                    leaf['scale'] = random.uniform(0.1, 0.2)
                 img = leaf['img']
                 if img is None:
                     continue
                 h0, w0 = img.shape[:2]
                 sw, sh = int(w0 * leaf['scale']), int(h0 * leaf['scale'])
                 resized = cv2.resize(img, (sw, sh), interpolation=cv2.INTER_AREA)
-
-                # Rotate around its center
                 M = cv2.getRotationMatrix2D((sw/2, sh/2), leaf['angle'], 1)
                 rotated = cv2.warpAffine(
                     resized, M, (sw, sh),
@@ -396,23 +446,17 @@ def apply_filter_logic(frame, iw, ih, landmarks):
                     borderMode=cv2.BORDER_CONSTANT,
                     borderValue=(0,0,0,0)
                 )
-
                 x, y = int(leaf['x']), int(leaf['y'])
                 y1, y2 = max(0, y), min(ih, y + sh)
                 x1, x2 = max(0, x), min(iw, x + sw)
                 ly1, ly2 = max(0, -y), min(sh, ih - y)
                 lx1, lx2 = max(0, -x), min(sw, iw - x)
-
                 if y1 < y2 and x1 < x2:
                     alpha = rotated[ly1:ly2, lx1:lx2, 3:] / 255.0
-                    fg    = rotated[ly1:ly2, lx1:lx2, :3]
-                    bg    = overlay[y1:y2, x1:x2]
-
-                    # Alpha composite
+                    fg = rotated[ly1:ly2, lx1:lx2, :3]
+                    bg = overlay[y1:y2, x1:x2]
                     overlay[y1:y2, x1:x2] = (alpha * fg + (1 - alpha) * bg).astype(np.uint8)
-
             frame[:] = overlay
-
 
         elif current_filter == "cowboy":
             hat = fdata.get("hat")
@@ -461,40 +505,56 @@ def apply_filter_logic(frame, iw, ih, landmarks):
     except Exception as e:
         logger.error(f"Error applying filter {current_filter}: {e}")
 
-# ─── SERVER API ────────────────────────────────────────────────────────────────
+# Server API
 def gen_frames():
-    global last_filter
+    global last_filter, frame_counter, last_landmarks
+    frame_counter = 0
+    last_landmarks = None
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            logger.error("Failed to capture frame")
-            continue
-        frame = cv2.flip(frame, 1)
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        faces = face_mesh.process(rgb)
-
-        if current_filter != last_filter:
-            pygame.mixer.stop()
-            if current_filter == "cowboy":
-                cowboy_music.play(-1)
-            if current_filter == "chath":
-                chath_music.play(-1)
-            last_filter = current_filter
-
-        if faces.multi_face_landmarks:
-            apply_filter_logic(frame, *frame.shape[1::-1], faces.multi_face_landmarks[0])
+        if cap is None or not cap.isOpened():
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(frame, "Error: Cannot access webcam", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            logger.error("Webcam not accessible, displaying error message")
         else:
-            apply_filter_logic(frame, *frame.shape[1::-1], None)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                logger.error("Failed to capture frame")
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(frame, "Error: Failed to capture frame", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                time.sleep(0.1)
+            else:
+                frame = cv2.flip(frame, 1)
+                logger.debug(f"Frame captured: shape={frame.shape}")
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                ih, iw, _ = frame.shape
 
-        frame = np.clip(frame, 0, 255).astype(np.uint8)
-        ret2, buf = cv2.imencode(".jpg", frame)
-        if not ret2:
-            logger.error("Failed to encode frame")
-            continue
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n"
-        )
+                if current_filter != last_filter:
+                    pygame.mixer.stop()
+                    if current_filter == "cowboy":
+                        cowboy_music.play(-1)
+                    if current_filter == "chath":
+                        chath_music.play(-1)
+                    last_filter = current_filter
+
+                frame_counter += 1
+                if frame_counter % 5 == 0 or last_landmarks is None:
+                    results = face_mesh.process(rgb)
+                    if results.multi_face_landmarks:
+                        last_landmarks = results.multi_face_landmarks[0]
+                    else:
+                        last_landmarks = None
+                
+                apply_filter_logic(frame, iw, ih, last_landmarks)
+
+                frame = np.clip(frame, 0, 255).astype(np.uint8)
+                ret2, buf = cv2.imencode(".jpg", frame)
+                if not ret2:
+                    logger.error("Failed to encode frame")
+                    continue
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n"
+                )
 
 def set_filter(name):
     global current_filter
@@ -514,6 +574,9 @@ def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
+            if cap is None or not cap.isOpened():
+                logger.error("Cannot save snapshot: Webcam not accessible")
+                return None
             ret, frame = cap.read()
             if not ret or frame is None or frame.size == 0:
                 logger.error(f"Attempt {attempt+1}: Failed to capture frame for snapshot")
@@ -566,6 +629,9 @@ def save_snapshot(overlay_data=None, save_dir=PIC_DIR):
 
 def record_video(duration=5, save_dir=PIC_DIR):
     fps = 30
+    if cap is None or not cap.isOpened():
+        logger.error("Cannot record video: Webcam not accessible")
+        return None
     ret, frame = cap.read()
     if not ret or frame is None:
         logger.error("Failed to capture frame for video")
@@ -604,6 +670,9 @@ def record_video(duration=5, save_dir=PIC_DIR):
 
 def record_boomerang(duration=3, save_dir=PIC_DIR):
     fps = 30
+    if cap is None or not cap.isOpened():
+        logger.error("Cannot record boomerang: Webcam not accessible")
+        return None
     ret, frame = cap.read()
     if not ret or frame is None:
         logger.error("Failed to capture frame for boomerang")
